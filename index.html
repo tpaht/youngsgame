@@ -538,7 +538,7 @@ function upgradeSelected() {
   t.level++;
   t.damage = Math.floor(DEFS[t.type].damage * (1+0.5*(t.level-1)));
   t.range  = Math.floor(DEFS[t.type].range  * (1+0.1*(t.level-1)));
-  showTowerInfo(t); refreshUI();
+  selTId = null; clearInfo(); refreshUI();
 }
 
 function upgradeToVariant(key) {
@@ -551,7 +551,7 @@ function upgradeToVariant(key) {
   t.variant = key; t.level = 2;
   if (v.rangeMult)    t.range    = Math.floor(t.range    * v.rangeMult);
   if (v.fireRateMult) t.fireRate = Math.floor(t.fireRate * v.fireRateMult);
-  showTowerInfo(t); refreshUI();
+  selTId = null; clearInfo(); refreshUI();
 }
 
 function sellSelected() {
