@@ -321,6 +321,7 @@ const VARIANTS = {
   },
   longkick: {
     name:'Long Kick', cost:40, forType:'kick', glowColor:'#38bdf8',
+    icon:'🦵', projIcon:'🦵',
     effect:'farthest', farDmgMult:1.5, chance:0.20, rangeMult:1.9,
     desc:'20% chance to target the farthest enemy'
   },
@@ -337,7 +338,7 @@ const VARIANTS = {
   diarrhea: {
     name:'Diarrhea', cost:60, forType:'poop', glowColor:'#b45309',
     icon:'💦', projIcon:'💦',
-    fireRateMult:0.62,
+    fireRateMult:0.42,
     splatDuration:3.0,
     dotDmgMult:1.0,
     desc:'Faster attack • Brown water arc'
@@ -480,7 +481,7 @@ function launchWave() {
     const prev = waveCfg(wave - 1);
     const bossHp = Math.floor(prev.count * prev.hp * 1.05);
     const bossReward = Math.floor(prev.count * prev.reward * 2);
-    spawnQueue = [{ hp:bossHp, speed:1.5, reward:bossReward, boss:true }];
+    spawnQueue = [{ hp:bossHp, speed:4.5, reward:bossReward, boss:true }];
   } else {
     const cfg = waveCfg(wave);
     spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg}));
@@ -560,9 +561,100 @@ function sellSelected() {
   const idx = towers.findIndex(t=>t.id===selTId);
   if (idx===-1) return;
   const t = towers[idx];
-  money += Math.floor(DEFS[t.type].cost * 0.4);
+  money += t.fusion ? DEFS[t.type].cost * 2 : DEFS[t.type].cost;
   towers.splice(idx,1);
   selTId = null; clearInfo(); refreshUI();
+}
+
+// ── Fusion helpers ──
+function getFusionCandidates(t) {
+  if (t.level !== 2 || !t.variant || t.fusion) return [];
+  const dirs = [{dc:-1,dr:0,name:'Left'},{dc:1,dr:0,name:'Right'},{dc:0,dr:-1,name:'Up'},{dc:0,dr:1,name:'Down'}];
+  return dirs.reduce((acc,{dc,dr,name}) => {
+    const adj = towers.find(a => a.col===t.col+dc && a.row===t.row+dr &&
+      a.type===t.type && a.level===2 && a.variant!==null && !a.fusion && a.id!==t.id);
+    if (adj) acc.push({tower:adj, dir:name});
+    return acc;
+  }, []);
+}
+
+function fusedName(v1k, v2k, baseType) {
+  const tName = {fist:'Fist',kick:'Kick',spit:'Spit',poop:'Poop'}[baseType];
+  if (v1k === v2k) {
+    const p = {smelly:'So Smelly',bloody:'Gory',lightning:'Thunderstorm',longkick:'Ultra Long',
+               phlegm:'Toxic Phlegm',herpes:'Epidemic',diarrhea:'Explosive Diarrhea',constipation:'Mega Constipation'};
+    return `${p[v1k]||'Mega'} ${tName}`;
+  }
+  const strip = s => VARIANTS[s].name.replace(/ ?(Fist|Kick|Spit|Poop)$/,'');
+  return `${strip(v1k)} ${strip(v2k)} ${tName}`;
+}
+
+function fuseTower(targetId) {
+  const sel = towers.find(t => t.id===selTId);
+  const con = towers.find(t => t.id===targetId);
+  if (!sel || !con || sel.type !== con.type) return;
+  sel.fusion   = [sel.variant, con.variant];
+  sel.damage   = sel.damage + con.damage;
+  sel.fireRate = Math.floor((sel.fireRate + con.fireRate) / 2);
+  sel.range    = Math.max(sel.range, con.range);
+  sel.level    = 3;
+  towers.splice(towers.findIndex(t => t.id===targetId), 1);
+  selTId = null; clearInfo(); refreshUI();
+  suppressNextTap = true; setTimeout(() => suppressNextTap = false, 450);
+}
+
+function applyVariantEffect(e, vKey, p, boosted) {
+  if (vKey === 'longkick') return;
+  const v = VARIANTS[vKey];
+  if (!v || !v.effect) return;
+  const chance = boosted ? Math.min(0.55, v.chance * 2) : v.chance;
+  if (Math.random() >= chance) return;
+  if (v.effect === 'slow') {
+    e.slow = boosted ? v.slowDuration * 2 : v.slowDuration;
+    addParticle(e.x, e.y-22, '❄ SLOW!', '#67e8f9');
+  } else if (v.effect === 'splash') {
+    const ratio  = boosted ? Math.min(0.85, v.splashRatio * 1.5) : v.splashRatio;
+    const radius = boosted ? v.splashRadius * 1.4 : v.splashRadius;
+    const sd = Math.floor(p.damage * ratio);
+    for (const ne of enemies) {
+      if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=radius) {
+        const nd = dealDamage(ne, sd);
+        addParticle(ne.x, ne.y-11, `-${nd}`, '#fca5a5');
+      }
+    }
+    addParticle(e.x, e.y-22, '💥 SPLASH!', '#f87171');
+  } else if (v.effect === 'chain') {
+    const chainCount = boosted ? v.chainCount + 2 : v.chainCount;
+    let from = e, cdmg = p.damage;
+    const done = new Set([e.id]);
+    for (let i = 0; i < chainCount; i++) {
+      cdmg = Math.floor(cdmg * v.chainDmgRatio);
+      let next = null, minD = Infinity;
+      for (const ne of enemies) {
+        if (done.has(ne.id) || !ne.alive) continue;
+        const d = Math.hypot(ne.x-from.x, ne.y-from.y);
+        if (d < minD) { minD = d; next = ne; }
+      }
+      if (!next) break;
+      done.add(next.id);
+      const cd = dealDamage(next, cdmg);
+      addParticle(next.x, next.y-11, `⚡-${cd}`, '#fbbf24');
+      chainEffects.push({x1:from.x,y1:from.y,x2:next.x,y2:next.y,life:0.45,maxLife:0.45});
+      from = next;
+    }
+    addParticle(e.x, e.y-22, '⚡ CHAIN!', '#fbbf24');
+  } else if (v.effect === 'aoe_slow') {
+    const dur    = boosted ? v.slowDuration * 2 : v.slowDuration;
+    const radius = boosted ? v.slowRadius * 1.4 : v.slowRadius;
+    e.slow = dur;
+    for (const ne of enemies) {
+      if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=radius) ne.slow = dur;
+    }
+    addParticle(e.x, e.y-22, '🟡 PHLEGM!', '#eab308');
+  } else if (v.effect === 'vulnerable') {
+    e.vulnerable = boosted ? v.vulnDuration * 2 : v.vulnDuration;
+    addParticle(e.x, e.y-22, '🦠 INFECTED!', '#a855f7');
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -616,7 +708,6 @@ function showBtn(id, label, disabled) {
 
 function showTowerInfo(t) {
   const def  = DEFS[t.type];
-  const sell = Math.floor(def.cost * 0.4);
   const txt  = document.getElementById('info-txt');
   hideAllUpgrades();
 
@@ -627,7 +718,7 @@ function showTowerInfo(t) {
   } else if (t.type==='kick' && t.variant===null) {
     txt.textContent = `🦵 Kick | Lv1 | Dmg:${t.damage} | Choose upgrade:`;
     showBtn('up-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`, money<VARIANTS.lightning.cost);
-    showBtn('up-longkick', `💨 Long Kick ($${VARIANTS.longkick.cost})`,  money<VARIANTS.longkick.cost);
+    showBtn('up-longkick', `🦵 Long Kick ($${VARIANTS.longkick.cost})`,  money<VARIANTS.longkick.cost);
   } else if (t.type==='spit' && t.variant===null) {
     txt.textContent = `💧 Spit | Lv1 | DoT:${t.damage}/tick | Choose upgrade:`;
     showBtn('up-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, money<VARIANTS.phlegm.cost);
@@ -636,6 +727,8 @@ function showTowerInfo(t) {
     txt.textContent = `💩 Poop | Lv1 | DoT:${t.damage}/tick | Choose upgrade:`;
     showBtn('up-diarrhea',     `💦 Diarrhea ($${VARIANTS.diarrhea.cost})`,         money<VARIANTS.diarrhea.cost);
     showBtn('up-constipation', `🪨 Constipation ($${VARIANTS.constipation.cost})`, money<VARIANTS.constipation.cost);
+  } else if (t.fusion) {
+    txt.textContent = `✦ ${fusedName(t.fusion[0],t.fusion[1],t.type)} | Lv3 | Dmg:${t.damage}`;
   } else if (t.variant!==null) {
     const v = VARIANTS[t.variant];
     const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'🦵',phlegm:'🟡',herpes:'🟣',diarrhea:'💦',constipation:'🪨'};
@@ -645,6 +738,7 @@ function showTowerInfo(t) {
     txt.textContent = `${def.icon} ${def.name} | Lv${t.level}/3 | Dmg:${t.damage}`;
     if (t.level<3) showBtn('up-btn', `Upgrade ($${ucost})`, money<ucost);
   }
+  const sell = t.fusion ? DEFS[t.type].cost * 2 : def.cost;
   showBtn('sell-btn', `Sell ($${sell})`, false);
   showPopup(t);
 }
@@ -715,7 +809,7 @@ function showPopup(t) {
   const title = document.getElementById('popup-title');
   const btns  = document.getElementById('popup-btns');
   const def   = DEFS[t.type];
-  const sell  = Math.floor(def.cost * 0.4);
+  const sell  = t.fusion ? DEFS[t.type].cost * 2 : def.cost;
   btns.innerHTML = '';
 
   const mkBtn = (id, label, color, disabled, fn) => {
@@ -734,7 +828,7 @@ function showPopup(t) {
   } else if (t.type==='kick' && t.variant===null) {
     title.textContent = `🦵 Kick | Dmg:${t.damage}`;
     mkBtn('pb-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`,'#ca8a04', money<VARIANTS.lightning.cost, ()=>{ upgradeToVariant('lightning'); });
-    mkBtn('pb-longkick', `💨 Long ($${VARIANTS.longkick.cost})`,    '#0369a1', money<VARIANTS.longkick.cost,  ()=>{ upgradeToVariant('longkick'); });
+    mkBtn('pb-longkick', `🦵 Long ($${VARIANTS.longkick.cost})`,    '#0369a1', money<VARIANTS.longkick.cost,  ()=>{ upgradeToVariant('longkick'); });
   } else if (t.type==='spit' && t.variant===null) {
     title.textContent = `💧 Spit | DoT:${t.damage}/tick`;
     mkBtn('pb-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, '#a16207', money<VARIANTS.phlegm.cost, ()=>{ upgradeToVariant('phlegm'); });
@@ -743,9 +837,17 @@ function showPopup(t) {
     title.textContent = `💩 Poop | DoT:${t.damage}/tick`;
     mkBtn('pb-diarrhea',     `💦 Diarrhea ($${VARIANTS.diarrhea.cost})`,         '#b45309', money<VARIANTS.diarrhea.cost,     ()=>{ upgradeToVariant('diarrhea'); });
     mkBtn('pb-constipation', `🪨 Constipation ($${VARIANTS.constipation.cost})`, '#292524', money<VARIANTS.constipation.cost, ()=>{ upgradeToVariant('constipation'); });
+  } else if (t.fusion) {
+    title.textContent = `✦ ${fusedName(t.fusion[0],t.fusion[1],t.type)} | Lv3 | Dmg:${t.damage}`;
   } else if (t.variant!==null) {
     const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'🦵',phlegm:'🟡',herpes:'🟣',diarrhea:'💦',constipation:'🪨'};
     title.textContent = `${icons[t.variant]} ${VARIANTS[t.variant].name} | Lv2`;
+    const candidates = getFusionCandidates(t);
+    for (const {tower:adj, dir} of candidates) {
+      const name = fusedName(t.variant, adj.variant, t.type);
+      const adjId = adj.id;
+      mkBtn(`pb-fuse-${adjId}`, `⚗ Fuse ${dir}: ${name}`, '#7c3aed', false, ()=>{ fuseTower(adjId); });
+    }
   } else {
     const ucost = Math.floor(def.cost*0.75);
     title.textContent = `${def.icon} ${def.name} | Lv${t.level}/3`;
@@ -859,7 +961,10 @@ function update(dt) {
     const def  = DEFS[t.type];
     const vDef = t.variant ? VARIANTS[t.variant] : null;
 
-    const isLong = t.variant==='longkick' && Math.random()<VARIANTS.longkick.chance;
+    const hasLongkick = t.variant==='longkick' || (t.fusion && t.fusion.includes('longkick'));
+    const lkDouble    = t.fusion && t.fusion[0]==='longkick' && t.fusion[1]==='longkick';
+    const lkChance    = lkDouble ? Math.min(0.5, VARIANTS.longkick.chance*2) : VARIANTS.longkick.chance;
+    const isLong      = hasLongkick && Math.random() < lkChance;
     let best=null, bestVal = isLong ? -Infinity : Infinity;
     for (const e of enemies) {
       const d=Math.hypot(e.x-t.x, e.y-t.y);
@@ -872,10 +977,21 @@ function update(dt) {
     if (t.type === 'poop') {
       const dist = Math.hypot(best.x-t.x, best.y-t.y);
       const flightTime = 0.8 + dist/(TILE*14);
-      const pv = t.variant ? VARIANTS[t.variant] : null;
-      const projIcon    = pv?.projIcon  ?? '💩';
-      const splatDur    = pv?.splatDuration ?? 3.0;
-      const splatDotDmg = pv ? Math.floor(t.damage * pv.dotDmgMult) : t.damage;
+      let projIcon, splatDur, splatDotDmg;
+      if (t.fusion) {
+        const [f1, f2] = t.fusion;
+        const fv1 = VARIANTS[f1], fv2 = VARIANTS[f2];
+        const same = f1 === f2;
+        projIcon    = fv1.projIcon ?? '💩';
+        splatDur    = same ? (fv1.splatDuration||3) * 2 : Math.max(fv1.splatDuration||3, fv2.splatDuration||3);
+        const dMult = same ? (fv1.dotDmgMult||1) * 1.5 : Math.max(fv1.dotDmgMult||1, fv2.dotDmgMult||1);
+        splatDotDmg = Math.floor(t.damage * dMult);
+      } else {
+        const pv = t.variant ? VARIANTS[t.variant] : null;
+        projIcon    = pv?.projIcon  ?? '💩';
+        splatDur    = pv?.splatDuration ?? 3.0;
+        splatDotDmg = pv ? Math.floor(t.damage * pv.dotDmgMult) : t.damage;
+      }
       projectiles.push({
         id:pId++, done:false, arc:true,
         x:t.x, y:t.y,
@@ -884,14 +1000,14 @@ function update(dt) {
         progress:0, duration:flightTime,
         arcHeight: Math.min(dist*0.55, TILE*5.5),
         dotDmg:t.damage, splatDuration:splatDur, splatDotDmg,
-        type:'poop', icon:projIcon, variant:t.variant,
+        type:'poop', icon:projIcon, variant:t.variant, fusion:t.fusion||null,
         speed:0, dot:false, special:false, glowColor:null, damage:0
       });
       continue;
     }
 
     const projDmg  = isLong ? Math.floor(t.damage*VARIANTS.longkick.farDmgMult) : t.damage;
-    const projGlow = isLong ? '#38bdf8' : (vDef ? vDef.glowColor : null);
+    const projGlow = isLong ? '#38bdf8' : (vDef ? vDef.glowColor : (t.fusion ? VARIANTS[t.fusion[0]].glowColor : null));
 
     projectiles.push({
       id:pId++, done:false,
@@ -899,7 +1015,7 @@ function update(dt) {
       targetId:best.id, tx:best.x, ty:best.y,
       damage:projDmg, speed:def.projSpeed,
       icon:isLong ? '🦵' : def.projIcon, type:t.type,
-      variant:t.variant, special:isLong, glowColor:projGlow,
+      variant:t.variant, fusion:t.fusion||null, special:isLong, glowColor:projGlow,
       dot:def.dot, dotDmg:t.damage,
       dotInterval:def.dotInterval, dotDuration:def.dotDuration
     });
@@ -948,53 +1064,16 @@ function update(dt) {
           const ad = dealDamage(e, p.damage);
           addParticle(e.x, e.y-11, `-${ad}`, p.glowColor||DEFS[p.type].color);
         }
-        // Variant effects
-        if (p.variant && p.variant!=='longkick' && Math.random()<VARIANTS[p.variant].chance) {
-          const v = VARIANTS[p.variant];
-          if (v.effect==='slow') {
-            e.slow = v.slowDuration;
-            addParticle(e.x, e.y-22, '❄ SLOW!', '#67e8f9');
-          } else if (v.effect==='splash') {
-            const sd = Math.floor(p.damage*v.splashRatio);
-            for (const ne of enemies) {
-              if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=v.splashRadius) {
-                const nd = dealDamage(ne, sd);
-                addParticle(ne.x, ne.y-11, `-${nd}`, '#fca5a5');
-              }
-            }
-            addParticle(e.x, e.y-22, '💥 SPLASH!', '#f87171');
-          } else if (v.effect==='chain') {
-            let from=e, cdmg=p.damage;
-            const done=new Set([e.id]);
-            for (let i=0;i<v.chainCount;i++) {
-              cdmg = Math.floor(cdmg*v.chainDmgRatio);
-              let next=null, minD=Infinity;
-              for (const ne of enemies) {
-                if (done.has(ne.id)||!ne.alive) continue;
-                const d=Math.hypot(ne.x-from.x, ne.y-from.y);
-                if (d<minD){minD=d;next=ne;}
-              }
-              if (!next) break;
-              done.add(next.id);
-              const cd = dealDamage(next, cdmg);
-              addParticle(next.x, next.y-11, `⚡-${cd}`, '#fbbf24');
-              chainEffects.push({ x1:from.x, y1:from.y, x2:next.x, y2:next.y, life:0.45, maxLife:0.45 });
-              from = next;
-            }
-            addParticle(e.x, e.y-22, '⚡ CHAIN!', '#fbbf24');
-          } else if (v.effect==='aoe_slow') {
-            e.slow = v.slowDuration;
-            for (const ne of enemies) {
-              if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=v.slowRadius)
-                ne.slow = v.slowDuration;
-            }
-            addParticle(e.x, e.y-22, '🟡 PHLEGM!', '#eab308');
-          } else if (v.effect==='vulnerable') {
-            e.vulnerable = v.vulnDuration;
-            addParticle(e.x, e.y-22, '🦠 INFECTED!', '#a855f7');
-          }
+        // Variant / fusion effects
+        if (p.fusion) {
+          const [v1k, v2k] = p.fusion;
+          const same = v1k === v2k;
+          applyVariantEffect(e, v1k, p, same);
+          if (!same) applyVariantEffect(e, v2k, p, false);
+        } else if (p.variant && p.variant !== 'longkick') {
+          applyVariantEffect(e, p.variant, p, false);
         }
-        if (p.special) addParticle(e.x, e.y-22, '💨 LONG KICK!', '#38bdf8');
+        if (p.special) addParticle(e.x, e.y-22, '🦵 LONG KICK!', '#38bdf8');
       }
     } else {
       const m=p.speed*dt; p.x+=dx/dist*m; p.y+=dy/dist*m;
@@ -1089,15 +1168,25 @@ function draw() {
     }
     ctx.fillStyle='#3a3a3a';
     ctx.beginPath(); ctx.roundRect(t.col*TILE+3,t.row*TILE+3,TILE-6,TILE-6,5); ctx.fill();
-    ctx.fillStyle = t.variant ? VARIANTS[t.variant].glowColor : def.color;
+    const tileColor = t.fusion ? '#7c3aed' : (t.variant ? VARIANTS[t.variant].glowColor : def.color);
+    ctx.fillStyle = tileColor;
     ctx.beginPath(); ctx.roundRect(t.col*TILE+5,t.row*TILE+5,TILE-10,TILE-10,4); ctx.fill();
+    if (t.fusion) {
+      ctx.save();
+      ctx.strokeStyle = '#c4b5fd'; ctx.lineWidth = 2;
+      ctx.shadowColor = '#a78bfa'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.roundRect(t.col*TILE+5,t.row*TILE+5,TILE-10,TILE-10,4); ctx.stroke();
+      ctx.restore();
+    }
     ctx.font=`${Math.floor(TILE*0.48)}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    const tIcon = (t.variant && VARIANTS[t.variant].icon) ? VARIANTS[t.variant].icon : def.icon;
+    const tIcon = t.fusion ? (VARIANTS[t.fusion[0]].icon || def.icon)
+                           : (t.variant && VARIANTS[t.variant].icon) ? VARIANTS[t.variant].icon : def.icon;
     ctx.fillText(tIcon, t.x, t.y);
     if (t.level>1) {
-      ctx.fillStyle='#fbbf24'; ctx.font=`${Math.floor(TILE*0.22)}px serif`;
-      ctx.fillText('★'.repeat(t.level-1), t.x, t.row*TILE+TILE-Math.floor(TILE*0.15));
+      ctx.fillStyle = t.fusion ? '#c4b5fd' : '#fbbf24';
+      ctx.font=`${Math.floor(TILE*0.22)}px serif`;
+      ctx.fillText(t.fusion ? '✦✦' : '★'.repeat(t.level-1), t.x, t.row*TILE+TILE-Math.floor(TILE*0.15));
     }
   }
 
