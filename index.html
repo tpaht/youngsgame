@@ -26,7 +26,46 @@
       max-width:440px;
       display:flex;
       flex-direction:column;
+      position:relative;
     }
+
+    /* ── Tower popup ── */
+    #tower-popup {
+      display:none;
+      position:absolute;
+      background:#1a1a2e;
+      border:2px solid #4a4a7e;
+      border-radius:10px;
+      padding:8px 10px;
+      z-index:20;
+      pointer-events:auto;
+      box-shadow:0 4px 16px rgba(0,0,0,0.7);
+      min-width:160px;
+    }
+    #tower-popup::after {
+      content:'';
+      position:absolute;
+      bottom:-10px; left:50%;
+      transform:translateX(-50%);
+      border:5px solid transparent;
+      border-top-color:#4a4a7e;
+    }
+    #popup-title { font-size:0.72rem; color:#aaa; margin-bottom:6px; white-space:nowrap; }
+    #popup-btns  { display:flex; gap:4px; flex-wrap:wrap; }
+    #popup-btns button {
+      padding:7px 10px; border-radius:6px; border:none;
+      cursor:pointer; font-size:0.7rem; font-weight:bold;
+      -webkit-tap-highlight-color:transparent;
+    }
+    #popup-btns button:disabled { background:#555 !important; cursor:not-allowed; opacity:0.6; }
+    #pb-smelly    { background:#16a34a; color:#fff; }
+    #pb-bloody    { background:#b91c1c; color:#fff; }
+    #pb-lightning { background:#ca8a04; color:#fff; }
+    #pb-longkick  { background:#0369a1; color:#fff; }
+    #pb-phlegm    { background:#a16207; color:#fff; }
+    #pb-herpes    { background:#7e22ce; color:#fff; }
+    #pb-upgrade   { background:#2563eb; color:#fff; }
+    #pb-sell      { background:#dc2626; color:#fff; }
 
     /* ── Stats bar ── */
     #stats-bar {
@@ -157,6 +196,11 @@
       <button id="up-herpes"    style="display:none" onclick="upgradeToVariant('herpes')">🟣 Herpes ($50)</button>
       <button id="sell-btn"     style="display:none" onclick="sellSelected()">Sell</button>
     </div>
+  </div>
+
+  <div id="tower-popup">
+    <div id="popup-title"></div>
+    <div id="popup-btns"></div>
   </div>
 
 </div>
@@ -338,7 +382,7 @@ let selType=null, selTId=null;
 //  WAVE SYSTEM
 // ═══════════════════════════════════════════════
 function waveCfg(n) {
-  return { count:6+n*2, hp:Math.floor(70*Math.pow(1.35,n)), speed:52+n*5, reward:2+Math.floor(n*0.6) };
+  return { count:6+n*2, hp:Math.floor(70*Math.pow(1.35,n)), speed:44+n*3, reward:2+Math.floor(n*0.6) };
 }
 
 function sendWave() {
@@ -483,18 +527,85 @@ function showTowerInfo(t) {
     if (t.level<3) showBtn('up-btn', `Upgrade ($${ucost})`, money<ucost||state==='wave');
   }
   showBtn('sell-btn', `Sell ($${sell})`, false);
+  showPopup(t);
 }
 
 function clearInfo() {
   document.getElementById('info-txt').textContent = 'Tap a tower type, then tap a green tile to place it.';
   hideAllUpgrades();
   document.getElementById('sell-btn').style.display = 'none';
+  hidePopup();
+}
+
+function hidePopup() {
+  document.getElementById('tower-popup').style.display = 'none';
+}
+
+function showPopup(t) {
+  const popup = document.getElementById('tower-popup');
+  const title = document.getElementById('popup-title');
+  const btns  = document.getElementById('popup-btns');
+  const def   = DEFS[t.type];
+  const sell  = Math.floor(def.cost * 0.5 * t.level);
+  btns.innerHTML = '';
+
+  const mkBtn = (id, label, color, disabled, fn) => {
+    const b = document.createElement('button');
+    b.id = id; b.textContent = label; b.disabled = disabled;
+    b.style.background = disabled ? '' : color;
+    b.style.color = '#fff';
+    b.onclick = fn;
+    btns.appendChild(b);
+  };
+
+  if (t.type==='fist' && t.variant===null) {
+    title.textContent = `👊 Fist | Dmg:${t.damage}`;
+    mkBtn('pb-smelly',   `🟢 Smelly ($${VARIANTS.smelly.cost})`,   '#16a34a', money<VARIANTS.smelly.cost||state==='wave',   ()=>{upgradeToVariant('smelly');  showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-bloody',   `🔴 Bloody ($${VARIANTS.bloody.cost})`,   '#b91c1c', money<VARIANTS.bloody.cost||state==='wave',   ()=>{upgradeToVariant('bloody');  showPopup(towers.find(x=>x.id===t.id));});
+  } else if (t.type==='kick' && t.variant===null) {
+    title.textContent = `🦵 Kick | Dmg:${t.damage}`;
+    mkBtn('pb-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`,'#ca8a04', money<VARIANTS.lightning.cost||state==='wave', ()=>{upgradeToVariant('lightning');showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-longkick', `💨 Long ($${VARIANTS.longkick.cost})`,    '#0369a1', money<VARIANTS.longkick.cost||state==='wave',  ()=>{upgradeToVariant('longkick'); showPopup(towers.find(x=>x.id===t.id));});
+  } else if (t.type==='spit' && t.variant===null) {
+    title.textContent = `💧 Spit | DoT:${t.damage}/tick`;
+    mkBtn('pb-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, '#a16207', money<VARIANTS.phlegm.cost||state==='wave', ()=>{upgradeToVariant('phlegm'); showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, '#7e22ce', money<VARIANTS.herpes.cost||state==='wave', ()=>{upgradeToVariant('herpes'); showPopup(towers.find(x=>x.id===t.id));});
+  } else if (t.variant!==null) {
+    const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'💨',phlegm:'🟡',herpes:'🟣'};
+    title.textContent = `${icons[t.variant]} ${VARIANTS[t.variant].name} | Lv2`;
+  } else {
+    const ucost = Math.floor(def.cost*0.75);
+    title.textContent = `${def.icon} ${def.name} | Lv${t.level}/3`;
+    if (t.level<3) mkBtn('pb-upgrade', `Upgrade ($${ucost})`, '#2563eb', money<ucost||state==='wave', ()=>{upgradeSelected(); showPopup(towers.find(x=>x.id===t.id));});
+  }
+  mkBtn('pb-sell', `Sell ($${sell})`, '#dc2626', false, ()=>{ sellSelected(); });
+
+  // Position above the tower tile
+  const rect = canvas.getBoundingClientRect();
+  const wRect = document.getElementById('wrapper').getBoundingClientRect();
+  const scaleX = rect.width / W;
+  const scaleY = rect.height / H;
+  const tx = rect.left - wRect.left + t.x * scaleX;
+  const ty = rect.top  - wRect.top  + t.y * scaleY;
+
+  popup.style.display = 'block';
+  const pw = popup.offsetWidth || 180;
+  const ph = popup.offsetHeight || 80;
+  let left = tx - pw / 2;
+  let top  = ty - TILE * scaleY - ph - 6;
+  // flip below if off top
+  const statsH = document.getElementById('stats-bar').offsetHeight;
+  if (top < statsH) top = ty + TILE * scaleY + 6;
+  left = Math.max(4, Math.min(left, wRect.width - pw - 4));
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
 }
 
 function selectType(type) {
   if (state==='gameover') return;
   selType = selType===type ? null : type;
   selTId  = null;
+  hidePopup();
   if (selType) {
     const def = DEFS[selType];
     document.getElementById('info-txt').textContent = `${def.icon} ${def.name} — $${def.cost} | ${def.desc}`;
@@ -867,7 +978,14 @@ function getCoords(clientX, clientY) {
 function handleTap(col, row) {
   if (state==='gameover') return;
   if (selType) {
-    placeTower(col, row);
+    const existing = towers.find(t=>t.col===col&&t.row===row);
+    if (existing) {
+      selType = null;
+      selTId  = existing.id;
+      showTowerInfo(existing);
+    } else {
+      placeTower(col, row);
+    }
   } else {
     const t = towers.find(t=>t.col===col&&t.row===row);
     if (t) { selTId=t.id; showTowerInfo(t); }
