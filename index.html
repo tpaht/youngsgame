@@ -371,7 +371,7 @@ function playSound(type) {
 let money=150, lives=20, wave=0;
 let state='idle';
 
-let towers=[], enemies=[], projectiles=[], particles=[];
+let towers=[], enemies=[], projectiles=[], particles=[], chainEffects=[];
 let tId=0, eId=0, pId=0;
 let spawnQueue=[], spawnTimer=0, lastTs=0;
 
@@ -764,6 +764,7 @@ function update(dt) {
               done.add(next.id);
               const cd = dealDamage(next, cdmg);
               addParticle(next.x, next.y-11, `⚡-${cd}`, '#fbbf24');
+              chainEffects.push({ x1:from.x, y1:from.y, x2:next.x, y2:next.y, life:0.45, maxLife:0.45 });
               from = next;
             }
             addParticle(e.x, e.y-22, '⚡ CHAIN!', '#fbbf24');
@@ -789,6 +790,8 @@ function update(dt) {
 
   for (const p of particles) { p.life-=dt; p.y-=p.vy*dt; p.x+=p.vx*dt; }
   particles = particles.filter(p=>p.life>0);
+  for (const c of chainEffects) c.life -= dt;
+  chainEffects = chainEffects.filter(c=>c.life>0);
 
   // Wave complete
   if (spawnQueue.length===0 && enemies.length===0 && state==='wave') {
@@ -925,6 +928,43 @@ function draw() {
     }
     ctx.restore();
   }
+
+  // Chain lightning bolts
+  ctx.save();
+  for (const c of chainEffects) {
+    const alpha = c.life / c.maxLife;
+    const segments = 8;
+    const dx = (c.x2 - c.x1) / segments;
+    const dy = (c.y2 - c.y1) / segments;
+    const jitter = TILE * 0.28;
+    ctx.beginPath();
+    ctx.moveTo(c.x1, c.y1);
+    for (let i = 1; i < segments; i++) {
+      const px = c.x1 + dx * i + (Math.random() - 0.5) * jitter;
+      const py = c.y1 + dy * i + (Math.random() - 0.5) * jitter;
+      ctx.lineTo(px, py);
+    }
+    ctx.lineTo(c.x2, c.y2);
+    ctx.strokeStyle = `rgba(253,224,71,${alpha})`;
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#fbbf24';
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+    // thin bright core
+    ctx.beginPath();
+    ctx.moveTo(c.x1, c.y1);
+    for (let i = 1; i < segments; i++) {
+      const px = c.x1 + dx * i + (Math.random() - 0.5) * jitter * 0.5;
+      const py = c.y1 + dy * i + (Math.random() - 0.5) * jitter * 0.5;
+      ctx.lineTo(px, py);
+    }
+    ctx.lineTo(c.x2, c.y2);
+    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.8})`;
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 0;
+    ctx.stroke();
+  }
+  ctx.restore();
 
   // Particles
   ctx.save();
