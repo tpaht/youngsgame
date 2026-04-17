@@ -539,6 +539,7 @@ function upgradeSelected() {
   t.damage = Math.floor(DEFS[t.type].damage * (1+0.5*(t.level-1)));
   t.range  = Math.floor(DEFS[t.type].range  * (1+0.1*(t.level-1)));
   selTId = null; clearInfo(); refreshUI();
+  suppressNextTap = true; setTimeout(() => suppressNextTap = false, 450);
 }
 
 function upgradeToVariant(key) {
@@ -552,13 +553,14 @@ function upgradeToVariant(key) {
   if (v.rangeMult)    t.range    = Math.floor(t.range    * v.rangeMult);
   if (v.fireRateMult) t.fireRate = Math.floor(t.fireRate * v.fireRateMult);
   selTId = null; clearInfo(); refreshUI();
+  suppressNextTap = true; setTimeout(() => suppressNextTap = false, 450);
 }
 
 function sellSelected() {
   const idx = towers.findIndex(t=>t.id===selTId);
   if (idx===-1) return;
   const t = towers[idx];
-  money += Math.floor(DEFS[t.type].cost * 0.5 * t.level);
+  money += Math.floor(DEFS[t.type].cost * 0.4);
   towers.splice(idx,1);
   selTId = null; clearInfo(); refreshUI();
 }
@@ -614,7 +616,7 @@ function showBtn(id, label, disabled) {
 
 function showTowerInfo(t) {
   const def  = DEFS[t.type];
-  const sell = Math.floor(def.cost * 0.5 * t.level);
+  const sell = Math.floor(def.cost * 0.4);
   const txt  = document.getElementById('info-txt');
   hideAllUpgrades();
 
@@ -713,7 +715,7 @@ function showPopup(t) {
   const title = document.getElementById('popup-title');
   const btns  = document.getElementById('popup-btns');
   const def   = DEFS[t.type];
-  const sell  = Math.floor(def.cost * 0.5 * t.level);
+  const sell  = Math.floor(def.cost * 0.4);
   btns.innerHTML = '';
 
   const mkBtn = (id, label, color, disabled, fn) => {
