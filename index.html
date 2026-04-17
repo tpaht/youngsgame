@@ -727,27 +727,27 @@ function showPopup(t) {
 
   if (t.type==='fist' && t.variant===null) {
     title.textContent = `👊 Fist | Dmg:${t.damage}`;
-    mkBtn('pb-smelly',   `🟢 Smelly ($${VARIANTS.smelly.cost})`,   '#16a34a', money<VARIANTS.smelly.cost,   ()=>{upgradeToVariant('smelly');  showPopup(towers.find(x=>x.id===t.id));});
-    mkBtn('pb-bloody',   `🔴 Bloody ($${VARIANTS.bloody.cost})`,   '#b91c1c', money<VARIANTS.bloody.cost,   ()=>{upgradeToVariant('bloody');  showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-smelly',   `🟢 Smelly ($${VARIANTS.smelly.cost})`,   '#16a34a', money<VARIANTS.smelly.cost,   ()=>{ upgradeToVariant('smelly'); });
+    mkBtn('pb-bloody',   `🔴 Bloody ($${VARIANTS.bloody.cost})`,   '#b91c1c', money<VARIANTS.bloody.cost,   ()=>{ upgradeToVariant('bloody'); });
   } else if (t.type==='kick' && t.variant===null) {
     title.textContent = `🦵 Kick | Dmg:${t.damage}`;
-    mkBtn('pb-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`,'#ca8a04', money<VARIANTS.lightning.cost, ()=>{upgradeToVariant('lightning');showPopup(towers.find(x=>x.id===t.id));});
-    mkBtn('pb-longkick', `💨 Long ($${VARIANTS.longkick.cost})`,    '#0369a1', money<VARIANTS.longkick.cost,  ()=>{upgradeToVariant('longkick'); showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`,'#ca8a04', money<VARIANTS.lightning.cost, ()=>{ upgradeToVariant('lightning'); });
+    mkBtn('pb-longkick', `💨 Long ($${VARIANTS.longkick.cost})`,    '#0369a1', money<VARIANTS.longkick.cost,  ()=>{ upgradeToVariant('longkick'); });
   } else if (t.type==='spit' && t.variant===null) {
     title.textContent = `💧 Spit | DoT:${t.damage}/tick`;
-    mkBtn('pb-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, '#a16207', money<VARIANTS.phlegm.cost, ()=>{upgradeToVariant('phlegm'); showPopup(towers.find(x=>x.id===t.id));});
-    mkBtn('pb-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, '#7e22ce', money<VARIANTS.herpes.cost, ()=>{upgradeToVariant('herpes'); showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, '#a16207', money<VARIANTS.phlegm.cost, ()=>{ upgradeToVariant('phlegm'); });
+    mkBtn('pb-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, '#7e22ce', money<VARIANTS.herpes.cost, ()=>{ upgradeToVariant('herpes'); });
   } else if (t.type==='poop' && t.variant===null) {
     title.textContent = `💩 Poop | DoT:${t.damage}/tick`;
-    mkBtn('pb-diarrhea',     `💦 Diarrhea ($${VARIANTS.diarrhea.cost})`,         '#b45309', money<VARIANTS.diarrhea.cost,     ()=>{upgradeToVariant('diarrhea');     showPopup(towers.find(x=>x.id===t.id));});
-    mkBtn('pb-constipation', `🪨 Constipation ($${VARIANTS.constipation.cost})`, '#292524', money<VARIANTS.constipation.cost, ()=>{upgradeToVariant('constipation'); showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-diarrhea',     `💦 Diarrhea ($${VARIANTS.diarrhea.cost})`,         '#b45309', money<VARIANTS.diarrhea.cost,     ()=>{ upgradeToVariant('diarrhea'); });
+    mkBtn('pb-constipation', `🪨 Constipation ($${VARIANTS.constipation.cost})`, '#292524', money<VARIANTS.constipation.cost, ()=>{ upgradeToVariant('constipation'); });
   } else if (t.variant!==null) {
     const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'🦵',phlegm:'🟡',herpes:'🟣',diarrhea:'💦',constipation:'🪨'};
     title.textContent = `${icons[t.variant]} ${VARIANTS[t.variant].name} | Lv2`;
   } else {
     const ucost = Math.floor(def.cost*0.75);
     title.textContent = `${def.icon} ${def.name} | Lv${t.level}/3`;
-    if (t.level<3) mkBtn('pb-upgrade', `Upgrade ($${ucost})`, '#2563eb', money<ucost, ()=>{upgradeSelected(); showPopup(towers.find(x=>x.id===t.id));});
+    if (t.level<3) mkBtn('pb-upgrade', `Upgrade ($${ucost})`, '#2563eb', money<ucost, ()=>{ upgradeSelected(); });
   }
   mkBtn('pb-sell', `Sell ($${sell})`, '#dc2626', false, ()=>{ sellSelected(); });
 
