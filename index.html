@@ -444,6 +444,7 @@ let spawnQueue=[], spawnTimer=0, lastTs=0;
 let touchCol=-1, touchRow=-1;
 let buildPopupCol=-1, buildPopupRow=-1;
 let selType=null, selTId=null;
+let suppressNextTap=false;
 
 // ═══════════════════════════════════════════════
 //  WAVE SYSTEM
@@ -479,7 +480,7 @@ function launchWave() {
     const prev = waveCfg(wave - 1);
     const bossHp = Math.floor(prev.count * prev.hp * 1.5);
     const bossReward = Math.floor(prev.count * prev.reward * 2);
-    spawnQueue = [{ hp:bossHp, speed:Math.max(30, prev.speed - 8), reward:bossReward, boss:true }];
+    spawnQueue = [{ hp:bossHp, speed:waveCfg(wave).speed, reward:bossReward, boss:true }];
   } else {
     const cfg = waveCfg(wave);
     spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg}));
@@ -680,6 +681,8 @@ function showBuildPopup(col, row) {
       selType = type;
       placeTower(c, r);
       selType = null;
+      suppressNextTap = true;
+      setTimeout(() => suppressNextTap = false, 450);
       refreshUI();
     };
     btns.appendChild(b);
@@ -1278,22 +1281,34 @@ function getCoords(clientX, clientY) {
 
 function handleTap(col, row) {
   if (state==='gameover') return;
-  hideBuildPopup();
+  if (suppressNextTap) return;
 
   const existing = towers.find(t=>t.col===col&&t.row===row);
   if (existing) {
-    // Tap on existing tower — always show its info
-    selType = null;
-    selTId  = existing.id;
-    showTowerInfo(existing);
+    if (selTId === existing.id) {
+      // Same tower tapped again — deselect
+      selTId = null;
+      hideBuildPopup();
+      clearInfo();
+    } else {
+      hideBuildPopup();
+      selType = null;
+      selTId  = existing.id;
+      showTowerInfo(existing);
+    }
   } else if (!pathSet.has(`${col},${row}`) && col>=0 && col<COLS && row>=0 && row<ROWS) {
-    // Tap on empty buildable tile — show build popup
-    selTId = null;
-    hidePopup();
-    clearInfo();
-    showBuildPopup(col, row);
+    if (buildPopupCol === col && buildPopupRow === row) {
+      // Same empty tile tapped again — close build popup
+      hideBuildPopup();
+      clearInfo();
+    } else {
+      selTId = null;
+      hidePopup();
+      clearInfo();
+      showBuildPopup(col, row);
+    }
   } else {
-    // Tap on path or out of bounds — deselect everything
+    hideBuildPopup();
     selType = null;
     selTId  = null;
     clearInfo();
