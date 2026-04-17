@@ -1,340 +1,934 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Snake Game</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tower Defense</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    * { margin:0; padding:0; box-sizing:border-box; }
     body {
-      background: #1a1a2e;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      font-family: 'Segoe UI', sans-serif;
-      color: #eee;
-      touch-action: none;
-      overflow: hidden;
+      background:#111;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      font-family:'Segoe UI',sans-serif;
+      color:#eee;
+      min-height:100vh;
     }
-
-    h1 {
-      font-size: clamp(1.2rem, 5vw, 2rem);
-      margin-bottom: 8px;
-      letter-spacing: 4px;
-      color: #0f3460;
-      text-shadow: 0 0 10px #e94560;
-    }
-
-    #scoreboard {
-      display: flex;
-      gap: 30px;
-      margin-bottom: 8px;
-      font-size: clamp(0.8rem, 3vw, 1rem);
-    }
-
-    #scoreboard span { color: #e94560; font-weight: bold; font-size: clamp(1rem, 3.5vw, 1.2rem); }
-
+    #wrapper { width:100%; max-width:800px; }
     canvas {
-      border: 2px solid #e94560;
-      box-shadow: 0 0 20px #e94560aa;
-      border-radius: 4px;
-      display: block;
+      display:block;
+      width:100%;
+      cursor:crosshair;
     }
-
-    #message {
-      margin-top: 10px;
-      font-size: clamp(0.75rem, 3vw, 1rem);
-      color: #aaa;
-      height: 20px;
-      text-align: center;
+    /* ── Bottom UI ── */
+    #ui {
+      background:#1a1a2e;
+      padding:8px 10px;
+      border-top:2px solid #2d2d4e;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
     }
-
-    #message b { color: #e94560; }
-
-    /* D-pad */
-    #dpad {
-      display: grid;
-      grid-template-areas:
-        ". up ."
-        "left . right"
-        ". down .";
-      grid-template-columns: repeat(3, 56px);
-      grid-template-rows: repeat(3, 56px);
-      gap: 4px;
-      margin-top: 16px;
+    .tbtn {
+      padding:6px 10px;
+      border:2px solid #444;
+      border-radius:8px;
+      background:#222;
+      color:#eee;
+      cursor:pointer;
+      font-size:0.75rem;
+      text-align:center;
+      min-width:82px;
+      transition:border-color .15s, background .15s;
+      user-select:none;
     }
+    .tbtn:hover  { border-color:#aaa; }
+    .tbtn.sel    { border-color:#fff; background:#2d2d4e; }
+    .tbtn.unaffordable { opacity:.4; }
+    .tbtn .ico   { font-size:1.3rem; display:block; line-height:1.3; }
+    .tbtn .nm    { font-weight:bold; font-size:0.78rem; }
+    .tbtn .cst   { color:#fbbf24; font-size:0.75rem; }
 
-    #dpad button {
-      background: #0f3460;
-      border: 2px solid #e94560;
-      border-radius: 10px;
-      color: #eee;
-      font-size: 1.4rem;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      transition: background 0.1s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    #wave-btn {
+      padding:9px 16px;
+      background:#16a34a;
+      border:none; border-radius:8px;
+      color:#fff; font-size:0.9rem; font-weight:bold;
+      cursor:pointer; letter-spacing:1px;
+      transition:background .15s;
+      white-space:nowrap;
     }
+    #wave-btn:hover:not(:disabled) { background:#15803d; }
+    #wave-btn:disabled { background:#444; cursor:not-allowed; }
 
-    #dpad button:active { background: #e94560; }
-
-    #btn-up    { grid-area: up; }
-    #btn-left  { grid-area: left; }
-    #btn-right { grid-area: right; }
-    #btn-down  { grid-area: down; }
-
-    #restart-btn {
-      display: none;
-      margin-top: 12px;
-      padding: 10px 32px;
-      background: #e94560;
-      border: none;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 1rem;
-      font-weight: bold;
-      cursor: pointer;
-      letter-spacing: 2px;
-      -webkit-tap-highlight-color: transparent;
+    #stats {
+      margin-left:auto;
+      display:flex; gap:14px;
     }
+    .stat { display:flex; flex-direction:column; align-items:center; }
+    .stat .val { font-size:1.1rem; font-weight:bold; }
+    .stat .lbl { font-size:0.65rem; color:#aaa; }
+
+    #info-bar {
+      background:#16163a;
+      padding:6px 10px;
+      border-top:1px solid #2d2d4e;
+      font-size:0.8rem; color:#ccc;
+      display:flex; align-items:center; gap:8px;
+      min-height:34px; flex-wrap:wrap;
+    }
+    #info-bar button {
+      padding:3px 10px; border-radius:5px;
+      border:none; cursor:pointer;
+      font-size:0.78rem; font-weight:bold;
+    }
+    #up-btn      { background:#2563eb; color:#fff; }
+    #sell-btn    { background:#dc2626; color:#fff; }
+    #up-smelly   { background:#16a34a; color:#fff; }
+    #up-bloody   { background:#b91c1c; color:#fff; }
+    #up-lightning { background:#ca8a04; color:#fff; }
+    #up-longkick  { background:#0369a1; color:#fff; }
+    #up-phlegm    { background:#a16207; color:#fff; }
+    #up-herpes    { background:#7e22ce; color:#fff; }
+    #up-btn:disabled, #up-smelly:disabled, #up-bloody:disabled,
+    #up-lightning:disabled, #up-longkick:disabled,
+    #up-phlegm:disabled, #up-herpes:disabled { background:#555; cursor:not-allowed; }
   </style>
 </head>
 <body>
-  <h1>SNAKE</h1>
-  <div id="scoreboard">
-    Score: <span id="score">0</span>
-    &nbsp;&nbsp;Best: <span id="best">0</span>
-  </div>
+<div id="wrapper">
   <canvas id="c"></canvas>
-  <div id="message">Tap a direction or press <b>Space</b> to start</div>
 
-  <div id="dpad">
-    <button id="btn-up">▲</button>
-    <button id="btn-left">◀</button>
-    <button id="btn-right">▶</button>
-    <button id="btn-down">▼</button>
+  <div id="ui">
+    <!-- Tower buttons -->
+    <div class="tbtn" id="btn-fist" onclick="selectType('fist')">
+      <span class="ico">👊</span>
+      <span class="nm">Fist</span>
+      <span class="cst">$10</span>
+    </div>
+    <div class="tbtn" id="btn-kick" onclick="selectType('kick')">
+      <span class="ico">🦵</span>
+      <span class="nm">Kick</span>
+      <span class="cst">$15</span>
+    </div>
+    <div class="tbtn" id="btn-spit" onclick="selectType('spit')">
+      <span class="ico">💧</span>
+      <span class="nm">Spit</span>
+      <span class="cst">$20</span>
+    </div>
+
+    <button id="wave-btn" onclick="sendWave()">▶ Send Wave 1</button>
+
+    <div id="stats">
+      <div class="stat"><span class="val" id="s-money">150</span><span class="lbl">💰 Gold</span></div>
+      <div class="stat"><span class="val" id="s-lives">20</span><span class="lbl">❤️ Lives</span></div>
+      <div class="stat"><span class="val" id="s-wave">0</span><span class="lbl">Wave</span></div>
+    </div>
   </div>
 
-  <button id="restart-btn">RESTART</button>
+  <div id="info-bar">
+    <span id="info-txt">Select a tower below, then click a green tile to place it.</span>
+    <button id="up-btn"    style="display:none" onclick="upgradeSelected()">Upgrade</button>
+    <button id="up-smelly"    style="display:none" onclick="upgradeToVariant('smelly')">🟢 Smelly Fist ($30)</button>
+    <button id="up-bloody"    style="display:none" onclick="upgradeToVariant('bloody')">🔴 Bloody Fist ($30)</button>
+    <button id="up-lightning" style="display:none" onclick="upgradeToVariant('lightning')">⚡ Lightning Kick ($40)</button>
+    <button id="up-longkick"  style="display:none" onclick="upgradeToVariant('longkick')">💨 Long Kick ($40)</button>
+    <button id="up-phlegm"    style="display:none" onclick="upgradeToVariant('phlegm')">🟡 Phlegm Spit ($50)</button>
+    <button id="up-herpes"    style="display:none" onclick="upgradeToVariant('herpes')">🟣 Herpes Spit ($50)</button>
+    <button id="sell-btn"  style="display:none" onclick="sellSelected()">Sell</button>
+  </div>
+</div>
 
-  <script>
-    const canvas = document.getElementById('c');
-    const ctx    = canvas.getContext('2d');
-    const GRID   = 20;
+<script>
+// ═══════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════
+const TILE = 40, COLS = 20, ROWS = 12;
+const W = COLS * TILE;   // 800
+const H = ROWS * TILE;   // 480
 
-    // Responsive canvas size
-    function getSize() {
-      const maxW = Math.min(window.innerWidth - 16, 400);
-      const maxH = Math.min(window.innerHeight - 260, 400);
-      const size = Math.floor(Math.min(maxW, maxH) / GRID) * GRID;
-      return size;
-    }
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
 
-    let SIZE, COLS, ROWS;
-    function resizeCanvas() {
-      SIZE = getSize();
-      canvas.width  = SIZE;
-      canvas.height = SIZE;
-      COLS = SIZE / GRID;
-      ROWS = SIZE / GRID;
-    }
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+// ═══════════════════════════════════════════════
+//  PATH  (column, row pairs)
+// ═══════════════════════════════════════════════
+const WP_GRID = [
+  [0,2],[5,2],[5,6],[10,6],[10,2],[15,2],[15,9],[19,9]
+];
 
-    let snake, dir, nextDir, food, score, best = 0, running = false, started = false, animId;
+// Build set of path tiles  "col,row"
+const pathSet = new Set();
+for (let i = 0; i < WP_GRID.length - 1; i++) {
+  const [c1,r1] = WP_GRID[i], [c2,r2] = WP_GRID[i+1];
+  if (r1 === r2) {
+    for (let c = Math.min(c1,c2); c <= Math.max(c1,c2); c++) pathSet.add(`${c},${r1}`);
+  } else {
+    for (let r = Math.min(r1,r2); r <= Math.max(r1,r2); r++) pathSet.add(`${c1},${r}`);
+  }
+}
 
-    function init() {
-      snake   = [{ x: Math.floor(COLS/2), y: Math.floor(ROWS/2) },
-                 { x: Math.floor(COLS/2)-1, y: Math.floor(ROWS/2) },
-                 { x: Math.floor(COLS/2)-2, y: Math.floor(ROWS/2) }];
-      dir     = { x: 1, y: 0 };
-      nextDir = { x: 1, y: 0 };
-      score   = 0;
-      running = true;
-      started = true;
-      placeFood();
-      updateScore();
-      document.getElementById('message').textContent = '';
-      document.getElementById('restart-btn').style.display = 'none';
-      if (animId) cancelAnimationFrame(animId);
-      loop();
-    }
+// Pixel waypoints for enemy movement (centre of tile)
+const WAYPOINTS = [
+  { x: -20,   y: 2*TILE + TILE/2 },  // spawn off-screen
+  ...WP_GRID.map(([c,r]) => ({ x: c*TILE+TILE/2, y: r*TILE+TILE/2 })),
+  { x: W+20,  y: 9*TILE + TILE/2 }   // exit off-screen
+];
 
-    function placeFood() {
-      let pos;
-      do {
-        pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
-      } while (snake.some(s => s.x === pos.x && s.y === pos.y));
-      food = pos;
-    }
+// ═══════════════════════════════════════════════
+//  TOWER DEFINITIONS
+// ═══════════════════════════════════════════════
+const DEFS = {
+  fist: {
+    name:'Fist Tower', icon:'👊', cost:10,
+    damage:12, range:70,  fireRate:800,
+    color:'#f97316', projIcon:'👊', projSpeed:220,
+    dot:false,
+    desc:'Low dmg • Short range • Fast attack'
+  },
+  kick: {
+    name:'Kick Tower', icon:'🦵', cost:15,
+    damage:30, range:115, fireRate:1800,
+    color:'#3b82f6', projIcon:'🦵', projSpeed:270,
+    dot:false,
+    desc:'Medium dmg • Medium range • Slow attack'
+  },
+  spit: {
+    name:'Spit Tower', icon:'💧', cost:20,
+    damage:7,  range:155, fireRate:2500,
+    color:'#a855f7', projIcon:'💦', projSpeed:160,
+    dot:true, dotInterval:500, dotDuration:3000,
+    desc:'DoT dmg • Long range • Very slow attack'
+  }
+};
 
-    let lastTime = 0;
-    const SPEED = 130;
+// ═══════════════════════════════════════════════
+//  FIST UPGRADE VARIANTS
+// ═══════════════════════════════════════════════
+const VARIANTS = {
+  smelly: {
+    name:'Smelly Fist', cost:30, forType:'fist', glowColor:'#22c55e',
+    effect:'slow', slowDuration:1000, slowMult:0.35, chance:0.20,
+    desc:'20% chance to slow enemy for 1s'
+  },
+  bloody: {
+    name:'Bloody Fist', cost:30, forType:'fist', glowColor:'#ef4444',
+    effect:'splash', splashRadius:65, splashRatio:0.5, chance:0.20,
+    desc:'20% chance to splash damage nearby enemies'
+  },
+  lightning: {
+    name:'Lightning Kick', cost:40, forType:'kick', glowColor:'#fbbf24',
+    effect:'chain', chainCount:2, chainDmgRatio:0.65, chance:0.20,
+    desc:'20% chance to chain lightning to 3 enemies in sequence'
+  },
+  longkick: {
+    name:'Long Kick', cost:40, forType:'kick', glowColor:'#38bdf8',
+    effect:'farthest', farDmgMult:1.5, chance:0.20, rangeMult:1.9,
+    desc:'20% chance to target the farthest enemy with a powerful kick'
+  },
+  phlegm: {
+    name:'Phlegm Spit', cost:50, forType:'spit', glowColor:'#eab308',
+    effect:'aoe_slow', slowRadius:70, slowDuration:2500, slowMult:0.35, chance:0.20,
+    desc:'20% chance to slow hit enemy and nearby enemies for 2.5s'
+  },
+  herpes: {
+    name:'Herpes Spit', cost:50, forType:'spit', glowColor:'#a855f7',
+    effect:'vulnerable', vulnDuration:4000, vulnMult:2, chance:0.20,
+    desc:'20% chance to make enemy take 200% damage for 4s'
+  }
+};
 
-    function loop(ts = 0) {
-      animId = requestAnimationFrame(loop);
-      if (ts - lastTime < SPEED) return;
-      lastTime = ts;
-      if (running) update();
-      draw();
-    }
+// ═══════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════
+let money = 150, lives = 20, wave = 0;
+let state = 'idle';   // idle | wave | gameover
 
-    function update() {
-      dir = { ...nextDir };
-      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) return gameOver();
-      if (snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
-      snake.unshift(head);
-      if (head.x === food.x && head.y === food.y) {
-        score++;
-        if (score > best) best = score;
-        updateScore();
-        placeFood();
-      } else {
-        snake.pop();
-      }
-    }
+let towers = [], enemies = [], projectiles = [], particles = [];
+let tId=0, eId=0, pId=0;
+let spawnQueue=[], spawnTimer=0;
+let lastTs = 0;
 
-    function gameOver() {
-      running = false;
-      document.getElementById('message').innerHTML = 'Game Over!';
-      document.getElementById('restart-btn').style.display = 'inline-block';
-    }
+let hoverCol=-1, hoverRow=-1;
+let selType = null;   // tower type being placed
+let selTId  = null;   // id of placed tower being inspected
 
-    function updateScore() {
-      document.getElementById('score').textContent = score;
-      document.getElementById('best').textContent  = best;
-    }
+// ═══════════════════════════════════════════════
+//  WAVE SYSTEM
+// ═══════════════════════════════════════════════
+function waveCfg(n) {
+  return {
+    count:  6 + n * 2,
+    hp:     Math.floor(70 * Math.pow(1.35, n)),
+    speed:  52 + n * 5,
+    reward: 8 + n * 2
+  };
+}
 
-    function setDir(d) {
-      if (!started || !running) { init(); return; }
-      if (!(d.x === -dir.x && d.y === -dir.y)) nextDir = d;
-    }
+function sendWave() {
+  if (state !== 'idle') return;
+  wave++;
+  state = 'wave';
+  const cfg = waveCfg(wave);
+  spawnQueue = Array.from({length: cfg.count}, () => ({...cfg}));
+  spawnTimer = 0;
+  refreshUI();
+}
 
-    function draw() {
-      ctx.fillStyle = '#0d0d1a';
-      ctx.fillRect(0, 0, SIZE, SIZE);
+function spawnEnemy(cfg) {
+  enemies.push({
+    id: eId++, alive: true,
+    hp: cfg.hp, maxHp: cfg.hp,
+    speed: cfg.speed, baseSpeed: cfg.speed, reward: cfg.reward,
+    wpIdx: 0,
+    x: WAYPOINTS[0].x, y: WAYPOINTS[0].y,
+    dots: [],       // { damage, interval, duration, timer }
+    slow: 0,        // ms remaining of slow effect
+    vulnerable: 0   // ms remaining of 200% damage taken
+  });
+}
 
-      // Grid dots
-      ctx.fillStyle = '#ffffff08';
-      for (let x = 0; x < COLS; x++)
-        for (let y = 0; y < ROWS; y++)
-          ctx.fillRect(x * GRID + GRID/2 - 1, y * GRID + GRID/2 - 1, 2, 2);
+// ═══════════════════════════════════════════════
+//  TOWER ACTIONS
+// ═══════════════════════════════════════════════
+function placeTower(col, row) {
+  if (!selType) return;
+  const def = DEFS[selType];
+  if (money < def.cost) return;
+  if (col<0||col>=COLS||row<0||row>=ROWS) return;
+  if (pathSet.has(`${col},${row}`)) return;
+  if (towers.some(t=>t.col===col&&t.row===row)) return;
 
-      if (!started) return;
+  money -= def.cost;
+  towers.push({
+    id: tId++, type: selType, col, row,
+    x: col*TILE+TILE/2, y: row*TILE+TILE/2,
+    level: 1, variant: null,
+    damage: def.damage, range: def.range, fireRate: def.fireRate,
+    lastShot: 0
+  });
+  refreshUI();
+}
 
-      // Food
-      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 200);
-      ctx.shadowBlur = 10 + pulse * 10;
-      ctx.shadowColor = '#ff6b6b';
-      ctx.fillStyle = '#ff6b6b';
-      ctx.beginPath();
-      ctx.arc(food.x * GRID + GRID/2, food.y * GRID + GRID/2, GRID/2 - 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
+function upgradeSelected() {
+  const t = towers.find(t=>t.id===selTId);
+  if (!t||t.level>=3) return;
+  const cost = Math.floor(DEFS[t.type].cost * 0.75);
+  if (money < cost) return;
+  money -= cost;
+  t.level++;
+  t.damage = Math.floor(DEFS[t.type].damage * (1 + 0.5*(t.level-1)));
+  t.range  = Math.floor(DEFS[t.type].range  * (1 + 0.1*(t.level-1)));
+  showTowerInfo(t);
+  refreshUI();
+}
 
-      // Snake
-      snake.forEach((seg, i) => {
-        const ratio = 1 - i / snake.length;
-        ctx.fillStyle = i === 0 ? '#4ade80' : `hsl(145, 60%, ${25 + ratio * 30}%)`;
-        ctx.shadowBlur = i === 0 ? 8 : 0;
-        ctx.shadowColor = '#4ade80';
-        const pad = i === 0 ? 1 : 2;
-        ctx.beginPath();
-        ctx.roundRect(seg.x * GRID + pad, seg.y * GRID + pad, GRID - pad*2, GRID - pad*2, 3);
-        ctx.fill();
-      });
-      ctx.shadowBlur = 0;
+function upgradeToVariant(variantKey) {
+  const t = towers.find(t=>t.id===selTId);
+  if (!t || t.variant!==null) return;
+  const v = VARIANTS[variantKey];
+  if (v.forType && t.type !== v.forType) return;
+  if (money < v.cost) return;
+  money -= v.cost;
+  t.variant = variantKey;
+  t.level = 2;
+  if (v.rangeMult) t.range = Math.floor(t.range * v.rangeMult);
+  showTowerInfo(t);
+  refreshUI();
+}
 
-      // Eyes
-      const head = snake[0];
-      ctx.fillStyle = '#000';
-      getEyeOffsets().forEach(([ex, ey]) => {
-        ctx.beginPath();
-        ctx.arc(head.x * GRID + ex, head.y * GRID + ey, 2, 0, Math.PI * 2);
-        ctx.fill();
-      });
+function sellSelected() {
+  const idx = towers.findIndex(t=>t.id===selTId);
+  if (idx===-1) return;
+  const t = towers[idx];
+  money += Math.floor(DEFS[t.type].cost * 0.5 * t.level);
+  towers.splice(idx,1);
+  selTId = null;
+  clearInfo();
+  refreshUI();
+}
 
-      // Game over overlay
-      if (!running) {
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillRect(0, 0, SIZE, SIZE);
-        ctx.fillStyle = '#e94560';
-        ctx.font = `bold ${Math.floor(SIZE * 0.09)}px Segoe UI`;
-        ctx.textAlign = 'center';
-        ctx.fillText('GAME OVER', SIZE/2, SIZE/2 - 10);
-        ctx.fillStyle = '#eee';
-        ctx.font = `${Math.floor(SIZE * 0.05)}px Segoe UI`;
-        ctx.fillText(`Score: ${score}`, SIZE/2, SIZE/2 + 28);
-        ctx.textAlign = 'left';
-      }
-    }
+// ═══════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════
+function refreshUI() {
+  document.getElementById('s-money').textContent = money;
+  document.getElementById('s-lives').textContent = lives;
+  document.getElementById('s-wave').textContent  = wave;
 
-    function getEyeOffsets() {
-      const c = GRID / 2;
-      if (dir.x === 1)  return [[c+4, c-4], [c+4, c+4]];
-      if (dir.x === -1) return [[c-4, c-4], [c-4, c+4]];
-      if (dir.y === -1) return [[c-4, c-4], [c+4, c-4]];
-      return                   [[c-4, c+4], [c+4, c+4]];
-    }
+  ['fist','kick','spit'].forEach(type => {
+    const btn = document.getElementById(`btn-${type}`);
+    btn.classList.toggle('sel', selType===type);
+    btn.classList.toggle('unaffordable', money < DEFS[type].cost && selType!==type);
+  });
 
-    // Keyboard
-    document.addEventListener('keydown', e => {
-      const keys = {
-        ArrowUp: {x:0,y:-1}, w: {x:0,y:-1},
-        ArrowDown: {x:0,y:1}, s: {x:0,y:1},
-        ArrowLeft: {x:-1,y:0}, a: {x:-1,y:0},
-        ArrowRight: {x:1,y:0}, d: {x:1,y:0},
-      };
-      const d = keys[e.key];
-      if (d) setDir(d);
-      if ((e.key === 'Enter' || e.key === ' ') && !running) init();
-      if ([' ','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
-    });
+  const wBtn = document.getElementById('wave-btn');
+  if (state==='wave')    { wBtn.textContent='⏳ Wave in progress…'; wBtn.disabled=true; }
+  else if (state==='gameover') { wBtn.textContent='Game Over'; wBtn.disabled=true; }
+  else { wBtn.textContent=`▶ Send Wave ${wave+1}`; wBtn.disabled=false; }
+}
 
-    // D-pad buttons
-    const dpadMap = {
-      'btn-up':    {x:0,y:-1},
-      'btn-down':  {x:0,y:1},
-      'btn-left':  {x:-1,y:0},
-      'btn-right': {x:1,y:0},
-    };
-    Object.entries(dpadMap).forEach(([id, d]) => {
+function showTowerInfo(t) {
+  const def  = DEFS[t.type];
+  const sell = Math.floor(def.cost * 0.5 * t.level);
+
+  // Hide every upgrade button first
+  ['up-btn','up-smelly','up-bloody','up-lightning','up-longkick','up-phlegm','up-herpes'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+
+  const infoTxt = document.getElementById('info-txt');
+
+  if (t.type === 'fist' && t.variant === null) {
+    const show = (id, key, label) => {
       const btn = document.getElementById(id);
-      btn.addEventListener('touchstart', e => { e.preventDefault(); setDir(d); }, { passive: false });
-      btn.addEventListener('mousedown',  e => { e.preventDefault(); setDir(d); });
+      btn.style.display = 'inline-block';
+      btn.textContent   = `${label} ($${VARIANTS[key].cost})`;
+      btn.disabled      = money < VARIANTS[key].cost || state==='wave';
+    };
+    show('up-smelly', 'smelly', '🟢 Smelly Fist');
+    show('up-bloody',  'bloody', '🔴 Bloody Fist');
+    infoTxt.textContent = `👊 Fist Tower | Lv 1 | Dmg:${t.damage} | Range:${t.range} | Choose upgrade:`;
+
+  } else if (t.type === 'kick' && t.variant === null) {
+    const show = (id, key, label) => {
+      const btn = document.getElementById(id);
+      btn.style.display = 'inline-block';
+      btn.textContent   = `${label} ($${VARIANTS[key].cost})`;
+      btn.disabled      = money < VARIANTS[key].cost || state==='wave';
+    };
+    show('up-lightning', 'lightning', '⚡ Lightning Kick');
+    show('up-longkick',  'longkick',  '💨 Long Kick');
+    infoTxt.textContent = `🦵 Kick Tower | Lv 1 | Dmg:${t.damage} | Range:${t.range} | Choose upgrade:`;
+
+  } else if (t.type === 'spit' && t.variant === null) {
+    const show = (id, key, label) => {
+      const btn = document.getElementById(id);
+      btn.style.display = 'inline-block';
+      btn.textContent   = `${label} ($${VARIANTS[key].cost})`;
+      btn.disabled      = money < VARIANTS[key].cost || state==='wave';
+    };
+    show('up-phlegm', 'phlegm', '🟡 Phlegm Spit');
+    show('up-herpes',  'herpes', '🟣 Herpes Spit');
+    infoTxt.textContent = `💧 Spit Tower | Lv 1 | Dmg:${t.damage}/tick | Range:${t.range} | Choose upgrade:`;
+
+  } else if (t.variant !== null) {
+    // Already upgraded — variant info only, no further upgrade
+    const v = VARIANTS[t.variant];
+    const icons = { smelly:'🟢', bloody:'🔴', lightning:'⚡', longkick:'💨', phlegm:'🟡', herpes:'🟣' };
+    infoTxt.textContent = `${icons[t.variant]} ${v.name} | Lv 2 | Dmg:${t.damage} | ${v.desc}`;
+  }
+
+  const sb = document.getElementById('sell-btn');
+  sb.style.display = 'inline-block';
+  sb.textContent   = `Sell ($${sell})`;
+}
+
+function clearInfo() {
+  document.getElementById('info-txt').textContent =
+    'Select a tower below, then click a green tile to place it.';
+  ['up-btn','up-smelly','up-bloody','up-lightning','up-longkick','up-phlegm','up-herpes','sell-btn'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+}
+
+function selectType(type) {
+  if (state==='gameover') return;
+  selType = selType===type ? null : type;
+  selTId  = null;
+  if (selType) {
+    const def = DEFS[selType];
+    document.getElementById('info-txt').textContent =
+      `${def.icon} ${def.name}: ${def.desc} — Cost $${def.cost}`;
+    document.getElementById('up-btn').style.display   = 'none';
+    document.getElementById('sell-btn').style.display = 'none';
+  } else { clearInfo(); }
+  refreshUI();
+}
+
+// ═══════════════════════════════════════════════
+//  PARTICLES
+// ═══════════════════════════════════════════════
+function addParticle(x, y, text, color) {
+  particles.push({
+    x, y, text, color,
+    vx:(Math.random()-.5)*25, vy:35+Math.random()*20,
+    life:1.1, maxLife:1.1
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  DAMAGE HELPER  (respects herpes vulnerable)
+// ═══════════════════════════════════════════════
+function dealDamage(e, dmg) {
+  const actual = e.vulnerable > 0 ? Math.floor(dmg * VARIANTS.herpes.vulnMult) : dmg;
+  e.hp -= actual;
+  return actual;
+}
+
+// ═══════════════════════════════════════════════
+//  GAME LOOP
+// ═══════════════════════════════════════════════
+requestAnimationFrame(tick);
+
+function tick(ts) {
+  requestAnimationFrame(tick);
+  const dt = Math.min((ts - lastTs)/1000, 0.1);
+  lastTs = ts;
+
+  if (state === 'wave') update(dt);
+  draw();
+}
+
+function update(dt) {
+  // Spawn
+  spawnTimer -= dt * 1000;
+  if (spawnTimer <= 0 && spawnQueue.length > 0) {
+    spawnEnemy(spawnQueue.shift());
+    spawnTimer = 1200;
+  }
+
+  // Move enemies + apply DoT
+  for (const e of enemies) {
+    if (!e.alive) continue;
+
+    // Vulnerable timer
+    if (e.vulnerable > 0) e.vulnerable -= dt*1000;
+
+    // DoT ticks
+    for (const d of e.dots) {
+      d.duration -= dt*1000;
+      d.timer    -= dt*1000;
+      if (d.timer <= 0) {
+        const actualDmg = dealDamage(e, d.damage);
+        d.timer = d.interval;
+        addParticle(e.x - 6 + Math.random()*12, e.y - 14, `-${actualDmg}`, '#c084fc');
+      }
+    }
+    e.dots = e.dots.filter(d => d.duration > 0);
+
+    if (e.hp <= 0) {
+      e.alive = false;
+      money += e.reward;
+      addParticle(e.x, e.y - 10, `+$${e.reward}`, '#fbbf24');
+      refreshUI();
+      continue;
+    }
+
+    // Slow timer
+    if (e.slow > 0) e.slow -= dt*1000;
+    const effSpeed = e.slow > 0 ? e.baseSpeed * VARIANTS.smelly.slowMult : e.baseSpeed;
+
+    // Move toward next waypoint
+    const wp = WAYPOINTS[e.wpIdx + 1];
+    if (!wp) { e.alive=false; lives--; if(lives<=0){lives=0;state='gameover';} refreshUI(); continue; }
+    const dx=wp.x-e.x, dy=wp.y-e.y, dist=Math.hypot(dx,dy);
+    if (dist < 3) { e.wpIdx++; }
+    else { const m=effSpeed*dt; e.x+=dx/dist*m; e.y+=dy/dist*m; }
+  }
+  enemies = enemies.filter(e => e.alive);
+
+  // Tower shooting
+  for (const t of towers) {
+    t.lastShot += dt*1000;
+    if (t.lastShot < t.fireRate) continue;
+
+    const def  = DEFS[t.type];
+    const vDef = t.variant ? VARIANTS[t.variant] : null;
+
+    // Long Kick: 20% chance to target farthest enemy instead of closest
+    const isLongKickSpecial = t.variant === 'longkick' && Math.random() < VARIANTS.longkick.chance;
+    let best=null, bestVal = isLongKickSpecial ? -Infinity : Infinity;
+    for (const e of enemies) {
+      const d=Math.hypot(e.x-t.x, e.y-t.y);
+      if (d <= t.range) {
+        if (isLongKickSpecial ? d > bestVal : d < bestVal) { bestVal=d; best=e; }
+      }
+    }
+    if (!best) continue;
+    t.lastShot = 0;
+
+    const projDmg    = isLongKickSpecial ? Math.floor(t.damage * VARIANTS.longkick.farDmgMult) : t.damage;
+    const projGlow   = isLongKickSpecial ? '#38bdf8' : (vDef ? vDef.glowColor : null);
+
+    projectiles.push({
+      id:pId++, done:false,
+      x:t.x, y:t.y,
+      targetId:best.id, tx:best.x, ty:best.y,
+      damage:projDmg, speed:def.projSpeed,
+      icon:def.projIcon, type:t.type,
+      variant:t.variant,
+      special:isLongKickSpecial,
+      glowColor:projGlow,
+      dot:def.dot, dotDmg:t.damage,
+      dotInterval:def.dotInterval, dotDuration:def.dotDuration
     });
+  }
 
-    // Swipe support
-    let touchStartX, touchStartY;
-    canvas.addEventListener('touchstart', e => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      e.preventDefault();
-    }, { passive: false });
+  // Move projectiles
+  for (const p of projectiles) {
+    if (p.done) continue;
+    const e = enemies.find(e=>e.id===p.targetId);
+    if (e) { p.tx=e.x; p.ty=e.y; }
+    const dx=p.tx-p.x, dy=p.ty-p.y, dist=Math.hypot(dx,dy);
+    if (dist < 8) {
+      p.done = true;
+      if (e && e.alive) {
+        if (p.dot) {
+          e.dots.push({ damage:p.dotDmg, interval:p.dotInterval, duration:p.dotDuration, timer:0 });
+        } else {
+          const actualDmg = dealDamage(e, p.damage);
+          const hitColor  = p.glowColor || DEFS[p.type].color;
+          addParticle(e.x, e.y-12, `-${actualDmg}`, hitColor);
+        }
 
-    canvas.addEventListener('touchend', e => {
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) { if (!running) init(); return; }
-      if (Math.abs(dx) > Math.abs(dy))
-        setDir(dx > 0 ? {x:1,y:0} : {x:-1,y:0});
-      else
-        setDir(dy > 0 ? {x:0,y:1} : {x:0,y:-1});
-      e.preventDefault();
-    }, { passive: false });
+        // Variant effects (20% chance) — applies to all types incl. spit DoT
+        if (p.variant && p.variant !== 'longkick' && Math.random() < VARIANTS[p.variant].chance) {
+          const v = VARIANTS[p.variant];
+          if (v.effect === 'slow') {
+            e.slow = v.slowDuration;
+            addParticle(e.x, e.y-22, '❄ SLOW!', '#67e8f9');
+          } else if (v.effect === 'splash') {
+            const splashDmg = Math.floor(p.damage * v.splashRatio);
+            for (const ne of enemies) {
+              if (ne.id !== e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y) <= v.splashRadius) {
+                const sd = dealDamage(ne, splashDmg);
+                addParticle(ne.x, ne.y-12, `-${sd}`, '#fca5a5');
+              }
+            }
+            addParticle(e.x, e.y-22, '💥 SPLASH!', '#f87171');
+          } else if (v.effect === 'chain') {
+            let chainFrom = e, chainDmg = p.damage;
+            const chained = new Set([e.id]);
+            for (let c = 0; c < v.chainCount; c++) {
+              chainDmg = Math.floor(chainDmg * v.chainDmgRatio);
+              let next = null, minD = Infinity;
+              for (const ne of enemies) {
+                if (chained.has(ne.id) || !ne.alive) continue;
+                const d = Math.hypot(ne.x - chainFrom.x, ne.y - chainFrom.y);
+                if (d < minD) { minD = d; next = ne; }
+              }
+              if (!next) break;
+              chained.add(next.id);
+              const cd = dealDamage(next, chainDmg);
+              addParticle(next.x, next.y-12, `⚡-${cd}`, '#fbbf24');
+              chainFrom = next;
+            }
+            addParticle(e.x, e.y-22, '⚡ CHAIN!', '#fbbf24');
+          } else if (v.effect === 'aoe_slow') {
+            // Phlegm: slow hit enemy + all enemies nearby
+            e.slow = v.slowDuration;
+            for (const ne of enemies) {
+              if (ne.id !== e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y) <= v.slowRadius) {
+                ne.slow = v.slowDuration;
+              }
+            }
+            addParticle(e.x, e.y-22, '🟡 PHLEGM!', '#eab308');
+          } else if (v.effect === 'vulnerable') {
+            // Herpes: enemy takes 200% damage from all sources
+            e.vulnerable = v.vulnDuration;
+            addParticle(e.x, e.y-22, '🦠 INFECTED!', '#a855f7');
+          }
+        }
 
-    document.getElementById('restart-btn').addEventListener('click', init);
-    document.getElementById('restart-btn').addEventListener('touchstart', e => { e.preventDefault(); init(); }, { passive: false });
+        // Long Kick special label
+        if (p.special) {
+          addParticle(e.x, e.y-22, '💨 LONG KICK!', '#38bdf8');
+        }
+      }
+    } else {
+      const m=p.speed*dt;
+      p.x+=dx/dist*m; p.y+=dy/dist*m;
+    }
+  }
+  projectiles = projectiles.filter(p=>!p.done);
 
-    // Initial draw
-    draw();
-    loop();
-  </script>
+  // Particles
+  for (const p of particles) {
+    p.life-=dt; p.y-=p.vy*dt; p.x+=p.vx*dt;
+  }
+  particles = particles.filter(p=>p.life>0);
+
+  // Check wave complete
+  if (spawnQueue.length===0 && enemies.length===0 && state==='wave') {
+    state = 'idle';
+    const bonus = 25 + wave*5;
+    money += bonus;
+    refreshUI();
+    document.getElementById('info-txt').textContent =
+      `✅ Wave ${wave} cleared! Bonus +$${bonus}. Upgrade towers, then send the next wave.`;
+    document.getElementById('up-btn').style.display   = 'none';
+    document.getElementById('sell-btn').style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  DRAW
+// ═══════════════════════════════════════════════
+function draw() {
+  // Grass
+  ctx.fillStyle = '#3d6b34';
+  ctx.fillRect(0,0,W,H);
+
+  // Subtle grid
+  ctx.strokeStyle = '#355e2d';
+  ctx.lineWidth = 0.5;
+  for (let c=0;c<=COLS;c++) { ctx.beginPath();ctx.moveTo(c*TILE,0);ctx.lineTo(c*TILE,H);ctx.stroke(); }
+  for (let r=0;r<=ROWS;r++) { ctx.beginPath();ctx.moveTo(0,r*TILE);ctx.lineTo(W,r*TILE);ctx.stroke(); }
+
+  // Path tiles
+  for (const key of pathSet) {
+    const [c,r] = key.split(',').map(Number);
+    ctx.fillStyle = '#c2a46a';
+    ctx.fillRect(c*TILE+1, r*TILE+1, TILE-2, TILE-2);
+    // Dirt specks
+    ctx.fillStyle = '#b0905a';
+    [[6,6],[TILE-10,6],[6,TILE-10],[TILE-10,TILE-10]].forEach(([ox,oy])=>{
+      ctx.fillRect(c*TILE+ox, r*TILE+oy, 2, 2);
+    });
+  }
+
+  // Path direction arrows
+  ctx.font = '13px serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#8a6a30';
+  for (let i=0; i<WP_GRID.length-1; i++) {
+    const [c1,r1]=WP_GRID[i], [c2,r2]=WP_GRID[i+1];
+    const mC=(c1+c2)/2, mR=(r1+r2)/2;
+    const arrow = c2>c1?'→':c2<c1?'←':r2>r1?'↓':'↑';
+    ctx.fillText(arrow, mC*TILE+TILE/2, mR*TILE+TILE/2);
+  }
+
+  // START / END labels
+  ctx.fillStyle='#fff'; ctx.font='bold 10px Segoe UI';
+  ctx.textAlign='left';
+  ctx.fillText('▶ START', 2, 2*TILE+13);
+  ctx.textAlign='right';
+  ctx.fillText('END ✕', W-2, 9*TILE+13);
+
+  // Hover preview
+  if (selType && hoverCol>=0 && hoverRow>=0) {
+    const canPlace = !pathSet.has(`${hoverCol},${hoverRow}`) &&
+                     !towers.some(t=>t.col===hoverCol&&t.row===hoverRow) &&
+                     hoverCol>=0 && hoverCol<COLS && hoverRow>=0 && hoverRow<ROWS;
+    ctx.fillStyle = canPlace ? 'rgba(255,255,255,0.22)' : 'rgba(255,60,60,0.25)';
+    ctx.fillRect(hoverCol*TILE, hoverRow*TILE, TILE, TILE);
+    // Range ring
+    const def = DEFS[selType];
+    ctx.beginPath();
+    ctx.arc(hoverCol*TILE+TILE/2, hoverRow*TILE+TILE/2, def.range, 0, Math.PI*2);
+    ctx.strokeStyle='rgba(255,255,255,0.28)';
+    ctx.lineWidth=1.5; ctx.stroke();
+  }
+
+  // Selected tower range ring
+  if (selTId!==null) {
+    const t=towers.find(t=>t.id===selTId);
+    if (t) {
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.range, 0, Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,0.06)';
+      ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.4)';
+      ctx.lineWidth=1.5; ctx.stroke();
+    }
+  }
+
+  // Towers
+  for (const t of towers) {
+    const def=DEFS[t.type];
+    const sel=t.id===selTId;
+    // Outer ring (selected highlight)
+    if (sel) {
+      ctx.fillStyle='#fff';
+      ctx.beginPath();
+      ctx.roundRect(t.col*TILE+2,t.row*TILE+2,TILE-4,TILE-4,6);
+      ctx.fill();
+    }
+    // Base
+    ctx.fillStyle='#444';
+    ctx.beginPath();
+    ctx.roundRect(t.col*TILE+4,t.row*TILE+4,TILE-8,TILE-8,5);
+    ctx.fill();
+    // Color body — use variant color if upgraded
+    const bodyColor = t.variant ? VARIANTS[t.variant].glowColor : def.color;
+    ctx.fillStyle=bodyColor;
+    ctx.beginPath();
+    ctx.roundRect(t.col*TILE+6,t.row*TILE+6,TILE-12,TILE-12,4);
+    ctx.fill();
+    // Icon
+    ctx.font='17px serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(def.icon, t.x, t.y);
+    // Level stars
+    if (t.level>1) {
+      ctx.fillStyle='#fbbf24';
+      ctx.font='8px serif';
+      ctx.fillText('★'.repeat(t.level-1), t.x, t.row*TILE+TILE-6);
+    }
+  }
+
+  // Enemies
+  for (const e of enemies) {
+    const hasDot=e.dots.length>0;
+    const isSlowed=e.slow>0;
+    const isVuln=e.vulnerable>0;
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(e.x,e.y+12,10,4,0,0,Math.PI*2);
+    ctx.fill();
+    // Herpes vulnerable: pulsing yellow outer ring
+    if (isVuln) {
+      const pulse = 0.5 + 0.5*Math.sin(Date.now()/120);
+      ctx.beginPath();
+      ctx.arc(e.x,e.y,15,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(168,85,247,${0.5+0.4*pulse})`;
+      ctx.lineWidth=3; ctx.stroke();
+    }
+    // Body — priority: vulnerable (yellow) > slowed (blue) > poisoned (purple) > normal (red)
+    ctx.fillStyle= isVuln ? '#fde047' : isSlowed ? '#38bdf8' : hasDot ? '#a855f7' : '#ef4444';
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,11,0,Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle= isVuln ? '#a855f7' : isSlowed ? '#0284c7' : hasDot ? '#7c3aed':'#991b1b';
+    ctx.lineWidth=2; ctx.stroke();
+    // Emoji
+    ctx.font='14px serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('👾',e.x,e.y);
+    // HP bar
+    const bw=26,bh=4,bx=e.x-bw/2,by=e.y-20;
+    ctx.fillStyle='#222';
+    ctx.fillRect(bx,by,bw,bh);
+    const pct=e.hp/e.maxHp;
+    ctx.fillStyle= pct>.6?'#22c55e':pct>.3?'#f59e0b':'#ef4444';
+    ctx.fillRect(bx,by,bw*pct,bh);
+  }
+
+  // Projectiles — draw emoji rotated toward target, with colored glow for variants
+  for (const p of projectiles) {
+    const angle = Math.atan2(p.ty - p.y, p.tx - p.x);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(angle);
+    // Colored glow circle
+    if (p.glowColor) {
+      const radius = p.special ? 14 : 11;  // long kick special is bigger
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI*2);
+      ctx.fillStyle = p.glowColor + 'aa';
+      ctx.fill();
+    }
+    // Main emoji
+    ctx.font = `${p.special ? 18 : 16}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.icon, 0, 0);
+    // Secondary badge: ⚡ for lightning kick, 💨 for long kick special
+    if (p.variant === 'lightning') {
+      ctx.font = '10px serif';
+      ctx.fillText('⚡', 9, -9);
+    } else if (p.special) {
+      ctx.font = '10px serif';
+      ctx.fillText('💨', 9, -9);
+    }
+    ctx.restore();
+  }
+
+  // Floating text particles
+  ctx.save();
+  for (const p of particles) {
+    ctx.globalAlpha = p.life/p.maxLife;
+    ctx.fillStyle=p.color;
+    ctx.font=`bold 12px Segoe UI`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(p.text, p.x, p.y);
+  }
+  ctx.restore();
+
+  // ── Overlays ──
+  if (state==='idle' && wave===0) {
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#fff';
+    ctx.font='bold 28px Segoe UI';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Tower Defense', W/2, H/2-30);
+    ctx.font='16px Segoe UI';
+    ctx.fillStyle='#ddd';
+    ctx.fillText('Pick a tower type below → click a green tile to place it', W/2, H/2+10);
+    ctx.fillText('Then press  ▶ Send Wave  when ready!', W/2, H/2+38);
+  }
+
+  if (state==='gameover') {
+    ctx.fillStyle='rgba(0,0,0,0.65)';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#ef4444';
+    ctx.font='bold 52px Segoe UI';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('GAME OVER', W/2, H/2-22);
+    ctx.fillStyle='#eee';
+    ctx.font='20px Segoe UI';
+    ctx.fillText(`You survived ${wave} wave${wave!==1?'s':''}`, W/2, H/2+28);
+    ctx.fillStyle='#aaa';
+    ctx.font='14px Segoe UI';
+    ctx.fillText('Refresh the page to play again', W/2, H/2+60);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  INPUT
+// ═══════════════════════════════════════════════
+function canvasCoords(clientX, clientY) {
+  const rect=canvas.getBoundingClientRect();
+  const sx=W/rect.width, sy=H/rect.height;
+  return {
+    col: Math.floor((clientX-rect.left)*sx/TILE),
+    row: Math.floor((clientY-rect.top)*sy/TILE)
+  };
+}
+
+canvas.addEventListener('mousemove', e => {
+  const {col,row}=canvasCoords(e.clientX,e.clientY);
+  hoverCol=col; hoverRow=row;
+});
+canvas.addEventListener('mouseleave', ()=>{hoverCol=-1;hoverRow=-1;});
+
+canvas.addEventListener('click', e => {
+  if (state==='gameover') return;
+  const {col,row}=canvasCoords(e.clientX,e.clientY);
+  if (selType) {
+    placeTower(col,row);
+  } else {
+    const t=towers.find(t=>t.col===col&&t.row===row);
+    if (t) { selTId=t.id; showTowerInfo(t); }
+    else   { selTId=null; clearInfo(); }
+  }
+  refreshUI();
+});
+
+canvas.addEventListener('touchstart', e=>{
+  e.preventDefault();
+  const touch=e.touches[0];
+  const {col,row}=canvasCoords(touch.clientX,touch.clientY);
+  if (state==='gameover') return;
+  if (selType) {
+    placeTower(col,row);
+  } else {
+    const t=towers.find(t=>t.col===col&&t.row===row);
+    if (t) { selTId=t.id; showTowerInfo(t); }
+    else   { selTId=null; clearInfo(); }
+  }
+  refreshUI();
+},{passive:false});
+
+// Init
+refreshUI();
+requestAnimationFrame(draw);
+</script>
 </body>
 </html>
