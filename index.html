@@ -97,6 +97,7 @@
       -webkit-tap-highlight-color:transparent;
     }
     .bpbtn .bico { font-size:1.4rem; line-height:1.2; }
+    .bpbtn .bname { color:#d1d5db; font-size:0.6rem; line-height:1.1; }
     .bpbtn .bcst { color:#fbbf24; font-size:0.65rem; }
     .bpbtn:disabled { opacity:0.38; cursor:not-allowed; }
     .bpbtn:not(:disabled):active { background:#2d4a2d; }
@@ -610,7 +611,7 @@ function fuseTower(targetId) {
   const sel = towers.find(t => t.id===selTId);
   const con = towers.find(t => t.id===targetId);
   if (!sel || !con || sel.type !== con.type) return;
-  const fuseCost = lv2UpgradeCost(sel);
+  const fuseCost = VARIANTS[sel.variant].cost;
   if (money < fuseCost) return;
   money -= fuseCost;
   sel.fusion   = [sel.variant, con.variant];
@@ -792,7 +793,8 @@ function showBuildPopup(col, row) {
     const b = document.createElement('button');
     b.className = 'bpbtn';
     b.disabled  = money < def.cost;
-    b.innerHTML = `<span class="bico">${def.icon}</span><span class="bcst">$${def.cost}</span>`;
+    const bnames = {fist:'Fist', kick:'Foot', spit:'Spit', poop:'Poop'};
+    b.innerHTML = `<span class="bico">${def.icon}</span><span class="bname">${bnames[type]||type}</span><span class="bcst">$${def.cost}</span>`;
     b.onclick = () => {
       const c = buildPopupCol, r = buildPopupRow;
       hideBuildPopup();
@@ -906,7 +908,7 @@ function showPopup(t) {
       for (const {tower:adj, dir} of candidates) {
         const name = fusedName(t.variant, adj.variant, t.type);
         const adjId = adj.id;
-        const fuseCost = lv2UpgradeCost(t);
+        const fuseCost = VARIANTS[t.variant].cost;
         mkBtn(`pb-fuse-${adjId}`, `⚗ Fuse ${dir}: ${name} ($${fuseCost})`, '#7c3aed', money<fuseCost, ()=>{ fuseTower(adjId); });
       }
     }
