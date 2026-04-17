@@ -67,6 +67,40 @@
     #pb-upgrade   { background:#2563eb; color:#fff; }
     #pb-sell      { background:#dc2626; color:#fff; }
 
+    /* ── Build popup ── */
+    #build-popup {
+      display:none;
+      position:absolute;
+      background:#1a1a2e;
+      border:2px solid #2d6a2d;
+      border-radius:10px;
+      padding:7px 8px;
+      z-index:20;
+      pointer-events:auto;
+      box-shadow:0 4px 16px rgba(0,0,0,0.75);
+    }
+    #build-popup::after {
+      content:'';
+      position:absolute;
+      bottom:-10px; left:50%;
+      transform:translateX(-50%);
+      border:5px solid transparent;
+      border-top-color:#2d6a2d;
+    }
+    #build-popup-title { font-size:0.65rem; color:#7aab7a; margin-bottom:5px; text-align:center; }
+    #build-popup-btns  { display:flex; gap:5px; }
+    .bpbtn {
+      display:flex; flex-direction:column; align-items:center;
+      padding:6px 8px; border-radius:7px; border:none;
+      background:#223322; color:#eee; cursor:pointer;
+      font-size:0.65rem; text-align:center; min-width:52px;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .bpbtn .bico { font-size:1.4rem; line-height:1.2; }
+    .bpbtn .bcst { color:#fbbf24; font-size:0.65rem; }
+    .bpbtn:disabled { opacity:0.38; cursor:not-allowed; }
+    .bpbtn:not(:disabled):active { background:#2d4a2d; }
+
     /* ── Stats bar ── */
     #stats-bar {
       background:#1a1a2e;
@@ -153,9 +187,11 @@
     #up-bloody    { background:#b91c1c; color:#fff; }
     #up-lightning { background:#ca8a04; color:#fff; }
     #up-longkick  { background:#0369a1; color:#fff; }
-    #up-phlegm    { background:#a16207; color:#fff; }
-    #up-herpes    { background:#7e22ce; color:#fff; }
-    #up-btn       { background:#2563eb; color:#fff; }
+    #up-phlegm       { background:#a16207; color:#fff; }
+    #up-herpes       { background:#7e22ce; color:#fff; }
+    #up-diarrhea     { background:#b45309; color:#fff; }
+    #up-constipation { background:#292524; color:#fff; }
+    #up-btn          { background:#2563eb; color:#fff; }
     #sell-btn     { background:#dc2626; color:#fff; }
     #upgrade-btns button:disabled { background:#555 !important; cursor:not-allowed; }
   </style>
@@ -176,31 +212,41 @@
       <span class="ico">👊</span><span class="cst">$10</span>
     </div>
     <div class="tbtn" id="btn-kick" onclick="selectType('kick')">
-      <span class="ico">🦵</span><span class="cst">$15</span>
+      <span class="ico">🦶</span><span class="cst">$15</span>
     </div>
     <div class="tbtn" id="btn-spit" onclick="selectType('spit')">
       <span class="ico">💧</span><span class="cst">$20</span>
+    </div>
+    <div class="tbtn" id="btn-poop" onclick="selectType('poop')">
+      <span class="ico">💩</span><span class="cst">$30</span>
     </div>
     <button id="wave-btn" onclick="sendWave()">▶ Wave 1</button>
   </div>
 
   <div id="info-panel">
-    <span id="info-txt">Tap a tower type, then tap a green tile to place it.</span>
+    <span id="info-txt">Tap any green tile to build, or tap a tower to upgrade.</span>
     <div id="upgrade-btns">
       <button id="up-btn"       style="display:none" onclick="upgradeSelected()">Upgrade</button>
       <button id="up-smelly"    style="display:none" onclick="upgradeToVariant('smelly')">🟢 Smelly ($30)</button>
       <button id="up-bloody"    style="display:none" onclick="upgradeToVariant('bloody')">🔴 Bloody ($30)</button>
       <button id="up-lightning" style="display:none" onclick="upgradeToVariant('lightning')">⚡ Lightning ($40)</button>
-      <button id="up-longkick"  style="display:none" onclick="upgradeToVariant('longkick')">💨 Long ($40)</button>
+      <button id="up-longkick"  style="display:none" onclick="upgradeToVariant('longkick')">🦵 Long ($40)</button>
       <button id="up-phlegm"    style="display:none" onclick="upgradeToVariant('phlegm')">🟡 Phlegm ($50)</button>
-      <button id="up-herpes"    style="display:none" onclick="upgradeToVariant('herpes')">🟣 Herpes ($50)</button>
-      <button id="sell-btn"     style="display:none" onclick="sellSelected()">Sell</button>
+      <button id="up-herpes"       style="display:none" onclick="upgradeToVariant('herpes')">🟣 Herpes ($50)</button>
+      <button id="up-diarrhea"     style="display:none" onclick="upgradeToVariant('diarrhea')">💦 Diarrhea ($60)</button>
+      <button id="up-constipation" style="display:none" onclick="upgradeToVariant('constipation')">🪨 Constipation ($60)</button>
+      <button id="sell-btn"        style="display:none" onclick="sellSelected()">Sell</button>
     </div>
   </div>
 
   <div id="tower-popup">
     <div id="popup-title"></div>
     <div id="popup-btns"></div>
+  </div>
+
+  <div id="build-popup">
+    <div id="build-popup-title">Choose tower</div>
+    <div id="build-popup-btns"></div>
   </div>
 
 </div>
@@ -252,9 +298,9 @@ const DEFS = {
     desc:'Low dmg • Short range • Fast attack'
   },
   kick: {
-    name:'Kick Tower', icon:'🦵', cost:15,
+    name:'Kick Tower', icon:'🦶', cost:15,
     damage:30, range:TILE*3.0,  fireRate:1800,
-    color:'#3b82f6', projIcon:'🦵', projSpeed:TILE*7,
+    color:'#3b82f6', projIcon:'🦶', projSpeed:TILE*7,
     dot:false,
     desc:'Medium dmg • Medium range • Slow attack'
   },
@@ -264,6 +310,13 @@ const DEFS = {
     color:'#a855f7', projIcon:'💦', projSpeed:TILE*4,
     dot:true, dotInterval:500, dotDuration:3000,
     desc:'DoT dmg • Long range • Very slow attack'
+  },
+  poop: {
+    name:'Poop Tower', icon:'💩', cost:30,
+    damage:20, range:TILE*5.8, fireRate:7000,
+    color:'#78350f', projIcon:'💩', projSpeed:0,
+    dot:false,
+    desc:'Arc shot • Huge range • Poisons area for 3s'
   }
 };
 
@@ -300,6 +353,22 @@ const VARIANTS = {
     name:'Herpes Spit', cost:50, forType:'spit', glowColor:'#a855f7',
     effect:'vulnerable', vulnDuration:4000, vulnMult:2, chance:0.20,
     desc:'20% chance: enemy takes 200% damage for 4s'
+  },
+  diarrhea: {
+    name:'Diarrhea', cost:60, forType:'poop', glowColor:'#b45309',
+    icon:'💦', projIcon:'💦',
+    fireRateMult:0.62,
+    splatDuration:3.0,
+    dotDmgMult:1.0,
+    desc:'Faster attack • Brown water arc'
+  },
+  constipation: {
+    name:'Constipation', cost:60, forType:'poop', glowColor:'#292524',
+    icon:'🪨', projIcon:'💩',
+    fireRateMult:1.0,
+    splatDuration:6.0,
+    dotDmgMult:1.8,
+    desc:'Splat lasts 6s • 1.8× poison damage'
   }
 };
 
@@ -352,7 +421,6 @@ function playSound(type) {
       g.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
       src.start(now);
     } else if (type === 'death') {
-      // Enemy death: descending squeal + noise burst
       const o = audioCtx.createOscillator();
       o.connect(g);
       o.type = 'square';
@@ -361,6 +429,23 @@ function playSound(type) {
       g.gain.setValueAtTime(0.28, now);
       g.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
       o.start(now); o.stop(now + 0.28);
+    } else if (type === 'poop') {
+      // Wet splat thud
+      const o = audioCtx.createOscillator();
+      o.connect(g); o.type = 'sine';
+      o.frequency.setValueAtTime(90, now);
+      o.frequency.exponentialRampToValueAtTime(30, now + 0.18);
+      g.gain.setValueAtTime(0.65, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      o.start(now); o.stop(now + 0.22);
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate);
+      const d2 = buf.getChannelData(0);
+      for (let i=0;i<d2.length;i++) d2[i]=(Math.random()*2-1)*(1-i/d2.length);
+      const src2 = audioCtx.createBufferSource(); src2.buffer = buf;
+      const g2 = audioCtx.createGain(); g2.connect(audioCtx.destination);
+      src2.connect(g2); g2.gain.setValueAtTime(0.25, now);
+      g2.gain.exponentialRampToValueAtTime(0.001, now+0.12);
+      src2.start(now);
     }
   } catch(e) {}
 }
@@ -370,29 +455,56 @@ function playSound(type) {
 // ═══════════════════════════════════════════════
 let money=150, lives=20, wave=0;
 let state='idle';
+let bossWarnTimer=0;
 
-let towers=[], enemies=[], projectiles=[], particles=[], chainEffects=[];
+let towers=[], enemies=[], projectiles=[], particles=[], chainEffects=[], poopSplats=[];
 let tId=0, eId=0, pId=0;
 let spawnQueue=[], spawnTimer=0, lastTs=0;
 
-let touchCol=-1, touchRow=-1;   // finger position for placement preview
+let touchCol=-1, touchRow=-1;
+let buildPopupCol=-1, buildPopupRow=-1;
 let selType=null, selTId=null;
 
 // ═══════════════════════════════════════════════
 //  WAVE SYSTEM
 // ═══════════════════════════════════════════════
 function waveCfg(n) {
-  return { count:6+n*2, hp:Math.floor(70*Math.pow(1.35,n)), speed:44+n*3, reward:2+Math.floor(n*0.6) };
+  const PIVOT = 6;
+  const hp = n <= PIVOT
+    ? Math.floor(70 * Math.pow(1.35, n))
+    : Math.floor(70 * Math.pow(1.35, PIVOT) * Math.pow(1.18, n - PIVOT));
+  const spd = n <= PIVOT
+    ? 44 + n * 3
+    : (44 + PIVOT * 3) + Math.floor((n - PIVOT) * 1.5);
+  return { count:6+n*2, hp, speed:spd, reward:2+Math.floor(n*0.6) };
 }
+
+function isBossWave(n) { return n % 10 === 0; }
 
 function sendWave() {
   if (state!=='idle') return;
   wave++;
-  state='wave';
-  const cfg = waveCfg(wave);
-  spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg}));
-  spawnTimer = 0;
+  if (isBossWave(wave)) {
+    state = 'boss-warning';
+    bossWarnTimer = 3.0;
+  } else {
+    launchWave();
+  }
   refreshUI();
+}
+
+function launchWave() {
+  state = 'wave';
+  if (isBossWave(wave)) {
+    const prev = waveCfg(wave - 1);
+    const bossHp = Math.floor(prev.count * prev.hp * 1.5);
+    const bossReward = Math.floor(prev.count * prev.reward * 2);
+    spawnQueue = [{ hp:bossHp, speed:Math.max(30, prev.speed - 8), reward:bossReward, boss:true }];
+  } else {
+    const cfg = waveCfg(wave);
+    spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg}));
+  }
+  spawnTimer = 0;
 }
 
 function spawnEnemy(cfg) {
@@ -402,7 +514,8 @@ function spawnEnemy(cfg) {
     speed:cfg.speed, baseSpeed:cfg.speed, reward:cfg.reward,
     wpIdx:0,
     x:WAYPOINTS[0].x, y:WAYPOINTS[0].y,
-    dots:[], slow:0, vulnerable:0
+    dots:[], slow:0, vulnerable:0,
+    boss: cfg.boss || false
   });
 }
 
@@ -455,7 +568,8 @@ function upgradeToVariant(key) {
   if (money < v.cost) return;
   money -= v.cost;
   t.variant = key; t.level = 2;
-  if (v.rangeMult) t.range = Math.floor(t.range * v.rangeMult);
+  if (v.rangeMult)    t.range    = Math.floor(t.range    * v.rangeMult);
+  if (v.fireRateMult) t.fireRate = Math.floor(t.fireRate * v.fireRateMult);
   showTowerInfo(t); refreshUI();
 }
 
@@ -471,21 +585,22 @@ function sellSelected() {
 // ═══════════════════════════════════════════════
 //  UI HELPERS
 // ═══════════════════════════════════════════════
-const ALL_UP_IDS = ['up-btn','up-smelly','up-bloody','up-lightning','up-longkick','up-phlegm','up-herpes'];
+const ALL_UP_IDS = ['up-btn','up-smelly','up-bloody','up-lightning','up-longkick','up-phlegm','up-herpes','up-diarrhea','up-constipation'];
 
 function refreshUI() {
   document.getElementById('s-money').textContent = money;
   document.getElementById('s-lives').textContent = lives;
   document.getElementById('s-wave').textContent  = wave;
-  ['fist','kick','spit'].forEach(type => {
+  ['fist','kick','spit','poop'].forEach(type => {
     const b = document.getElementById(`btn-${type}`);
     b.classList.toggle('sel', selType===type);
     b.classList.toggle('unaffordable', money<DEFS[type].cost && selType!==type);
   });
   const wb = document.getElementById('wave-btn');
-  if (state==='wave')       { wb.textContent='⏳ In progress…'; wb.disabled=true; }
+  if (state==='wave')          { wb.textContent='⏳ In progress…'; wb.disabled=true; }
+  else if (state==='boss-warning') { wb.textContent='⚠️ Boss incoming!'; wb.disabled=true; }
   else if (state==='gameover') { wb.textContent='Game Over'; wb.disabled=true; }
-  else                      { wb.textContent=`▶ Wave ${wave+1}`; wb.disabled=false; }
+  else { wb.textContent = isBossWave(wave+1) ? `💀 Wave ${wave+1} — BOSS` : `▶ Wave ${wave+1}`; wb.disabled=false; }
 }
 
 function hideAllUpgrades() {
@@ -517,9 +632,13 @@ function showTowerInfo(t) {
     txt.textContent = `💧 Spit | Lv1 | DoT:${t.damage}/tick | Choose upgrade:`;
     showBtn('up-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, money<VARIANTS.phlegm.cost);
     showBtn('up-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, money<VARIANTS.herpes.cost);
+  } else if (t.type==='poop' && t.variant===null) {
+    txt.textContent = `💩 Poop | Lv1 | DoT:${t.damage}/tick | Choose upgrade:`;
+    showBtn('up-diarrhea',     `💦 Diarrhea ($${VARIANTS.diarrhea.cost})`,         money<VARIANTS.diarrhea.cost);
+    showBtn('up-constipation', `🪨 Constipation ($${VARIANTS.constipation.cost})`, money<VARIANTS.constipation.cost);
   } else if (t.variant!==null) {
     const v = VARIANTS[t.variant];
-    const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'💨',phlegm:'🟡',herpes:'🟣'};
+    const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'🦵',phlegm:'🟡',herpes:'🟣',diarrhea:'💦',constipation:'🪨'};
     txt.textContent = `${icons[t.variant]} ${v.name} | Lv2 | ${v.desc}`;
   } else {
     const ucost = Math.floor(def.cost*0.75);
@@ -531,7 +650,7 @@ function showTowerInfo(t) {
 }
 
 function clearInfo() {
-  document.getElementById('info-txt').textContent = 'Tap a tower type, then tap a green tile to place it.';
+  document.getElementById('info-txt').textContent = 'Tap any green tile to build, or tap a tower to upgrade.';
   hideAllUpgrades();
   document.getElementById('sell-btn').style.display = 'none';
   hidePopup();
@@ -539,6 +658,54 @@ function clearInfo() {
 
 function hidePopup() {
   document.getElementById('tower-popup').style.display = 'none';
+}
+
+function hideBuildPopup() {
+  document.getElementById('build-popup').style.display = 'none';
+  buildPopupCol = -1; buildPopupRow = -1;
+}
+
+function showBuildPopup(col, row) {
+  hideBuildPopup();
+  const popup = document.getElementById('build-popup');
+  const btns  = document.getElementById('build-popup-btns');
+  btns.innerHTML = '';
+  buildPopupCol = col; buildPopupRow = row;
+
+  for (const [type, def] of Object.entries(DEFS)) {
+    const b = document.createElement('button');
+    b.className = 'bpbtn';
+    b.disabled  = money < def.cost;
+    b.innerHTML = `<span class="bico">${def.icon}</span><span class="bcst">$${def.cost}</span>`;
+    b.onclick = () => {
+      const c = buildPopupCol, r = buildPopupRow;
+      hideBuildPopup();
+      selType = type;
+      placeTower(c, r);
+      selType = null;
+      refreshUI();
+    };
+    btns.appendChild(b);
+  }
+
+  // Position above the tile
+  const rect  = canvas.getBoundingClientRect();
+  const wRect = document.getElementById('wrapper').getBoundingClientRect();
+  const scaleX = rect.width / W;
+  const scaleY = rect.height / H;
+  const tx = rect.left - wRect.left + (col * TILE + TILE / 2) * scaleX;
+  const ty = rect.top  - wRect.top  + (row * TILE + TILE / 2) * scaleY;
+
+  popup.style.display = 'block';
+  const pw = popup.offsetWidth || 175;
+  const ph = popup.offsetHeight || 80;
+  let left = tx - pw / 2;
+  let top  = ty - TILE * scaleY - ph - 6;
+  const statsH = document.getElementById('stats-bar').offsetHeight;
+  if (top < statsH) top = ty + TILE * scaleY + 6;
+  left = Math.max(4, Math.min(left, wRect.width - pw - 4));
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
 }
 
 function showPopup(t) {
@@ -570,8 +737,12 @@ function showPopup(t) {
     title.textContent = `💧 Spit | DoT:${t.damage}/tick`;
     mkBtn('pb-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, '#a16207', money<VARIANTS.phlegm.cost, ()=>{upgradeToVariant('phlegm'); showPopup(towers.find(x=>x.id===t.id));});
     mkBtn('pb-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, '#7e22ce', money<VARIANTS.herpes.cost, ()=>{upgradeToVariant('herpes'); showPopup(towers.find(x=>x.id===t.id));});
+  } else if (t.type==='poop' && t.variant===null) {
+    title.textContent = `💩 Poop | DoT:${t.damage}/tick`;
+    mkBtn('pb-diarrhea',     `💦 Diarrhea ($${VARIANTS.diarrhea.cost})`,         '#b45309', money<VARIANTS.diarrhea.cost,     ()=>{upgradeToVariant('diarrhea');     showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-constipation', `🪨 Constipation ($${VARIANTS.constipation.cost})`, '#292524', money<VARIANTS.constipation.cost, ()=>{upgradeToVariant('constipation'); showPopup(towers.find(x=>x.id===t.id));});
   } else if (t.variant!==null) {
-    const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'💨',phlegm:'🟡',herpes:'🟣'};
+    const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'🦵',phlegm:'🟡',herpes:'🟣',diarrhea:'💦',constipation:'🪨'};
     title.textContent = `${icons[t.variant]} ${VARIANTS[t.variant].name} | Lv2`;
   } else {
     const ucost = Math.floor(def.cost*0.75);
@@ -606,6 +777,7 @@ function selectType(type) {
   selType = selType===type ? null : type;
   selTId  = null;
   hidePopup();
+  hideBuildPopup();
   if (selType) {
     const def = DEFS[selType];
     document.getElementById('info-txt').textContent = `${def.icon} ${def.name} — $${def.cost} | ${def.desc}`;
@@ -635,6 +807,10 @@ function tick(ts) {
   requestAnimationFrame(tick);
   const dt = Math.min((ts - lastTs)/1000, 0.1);
   lastTs = ts;
+  if (state==='boss-warning') {
+    bossWarnTimer -= dt;
+    if (bossWarnTimer <= 0) { launchWave(); refreshUI(); }
+  }
   if (state==='wave') update(dt);
   draw();
 }
@@ -659,7 +835,7 @@ function update(dt) {
       if (d.timer<=0) {
         const ad = dealDamage(e, d.damage);
         d.timer = d.interval;
-        addParticle(e.x-5+Math.random()*10, e.y-13, `-${ad}`, '#c084fc');
+        addParticle(e.x-5+Math.random()*10, e.y-13, `-${ad}`, d.color||'#c084fc');
       }
     }
     e.dots = e.dots.filter(d=>d.duration>0);
@@ -704,6 +880,27 @@ function update(dt) {
     t.lastShot = 0;
     playSound(t.type);
 
+    if (t.type === 'poop') {
+      const dist = Math.hypot(best.x-t.x, best.y-t.y);
+      const flightTime = 0.8 + dist/(TILE*14);
+      const pv = t.variant ? VARIANTS[t.variant] : null;
+      const projIcon    = pv?.projIcon  ?? '💩';
+      const splatDur    = pv?.splatDuration ?? 3.0;
+      const splatDotDmg = pv ? Math.floor(t.damage * pv.dotDmgMult) : t.damage;
+      projectiles.push({
+        id:pId++, done:false, arc:true,
+        x:t.x, y:t.y,
+        x1:t.x, y1:t.y, x2:best.x, y2:best.y,
+        tx:best.x, ty:best.y,
+        progress:0, duration:flightTime,
+        arcHeight: Math.min(dist*0.55, TILE*5.5),
+        dotDmg:t.damage, splatDuration:splatDur, splatDotDmg,
+        type:'poop', icon:projIcon, variant:t.variant,
+        speed:0, dot:false, special:false, glowColor:null, damage:0
+      });
+      continue;
+    }
+
     const projDmg  = isLong ? Math.floor(t.damage*VARIANTS.longkick.farDmgMult) : t.damage;
     const projGlow = isLong ? '#38bdf8' : (vDef ? vDef.glowColor : null);
 
@@ -712,16 +909,44 @@ function update(dt) {
       x:t.x, y:t.y,
       targetId:best.id, tx:best.x, ty:best.y,
       damage:projDmg, speed:def.projSpeed,
-      icon:def.projIcon, type:t.type,
+      icon:isLong ? '🦵' : def.projIcon, type:t.type,
       variant:t.variant, special:isLong, glowColor:projGlow,
       dot:def.dot, dotDmg:t.damage,
       dotInterval:def.dotInterval, dotDuration:def.dotDuration
     });
   }
 
+  // Poop splats — apply DoT to enemies in zone
+  for (const s of poopSplats) {
+    s.life -= dt;
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      if (Math.hypot(e.x-s.x, e.y-s.y) <= s.radius && !e.dots.some(d=>d.poop)) {
+        e.dots.push({damage:s.dotDmg, interval:400, duration:2500, timer:0, poop:true, color:'#92400e'});
+        addParticle(e.x, e.y-18, '💩 POISONED', '#92400e');
+      }
+    }
+  }
+  poopSplats = poopSplats.filter(s=>s.life>0);
+
   // Move projectiles
   for (const p of projectiles) {
     if (p.done) continue;
+
+    // Arc projectile (poop cannon)
+    if (p.arc) {
+      p.progress += dt / p.duration;
+      if (p.progress >= 1) {
+        p.progress = 1; p.done = true;
+        poopSplats.push({ x:p.x2, y:p.y2, life:p.splatDuration, maxLife:p.splatDuration, radius:TILE*0.88, dotDmg:p.splatDotDmg, variant:p.variant });
+        playSound('poop');
+        addParticle(p.x2, p.y2-10, '💩 SPLAT!', '#92400e');
+      }
+      p.x = p.x1 + (p.x2-p.x1)*p.progress;
+      p.y = (p.y1 + (p.y2-p.y1)*p.progress) - p.arcHeight*Math.sin(Math.PI*p.progress);
+      continue;
+    }
+
     const e = enemies.find(e=>e.id===p.targetId);
     if (e) { p.tx=e.x; p.ty=e.y; }
     const dx=p.tx-p.x, dy=p.ty-p.y, dist=Math.hypot(dx,dy);
@@ -879,31 +1104,56 @@ function draw() {
     ctx.beginPath(); ctx.roundRect(t.col*TILE+5,t.row*TILE+5,TILE-10,TILE-10,4); ctx.fill();
     ctx.font=`${Math.floor(TILE*0.48)}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(def.icon, t.x, t.y);
+    const tIcon = (t.variant && VARIANTS[t.variant].icon) ? VARIANTS[t.variant].icon : def.icon;
+    ctx.fillText(tIcon, t.x, t.y);
     if (t.level>1) {
       ctx.fillStyle='#fbbf24'; ctx.font=`${Math.floor(TILE*0.22)}px serif`;
       ctx.fillText('★'.repeat(t.level-1), t.x, t.row*TILE+TILE-Math.floor(TILE*0.15));
     }
   }
 
+  // Poop splats (drawn under enemies)
+  ctx.save();
+  for (const s of poopSplats) {
+    const a = s.life / s.maxLife;
+    ctx.globalAlpha = a * 0.85;
+    const sEmoji = s.variant === 'diarrhea' ? '💦' : s.variant === 'constipation' ? '🪨' : '💩';
+    const sColor = s.variant === 'diarrhea' ? '180,83,9' : s.variant === 'constipation' ? '41,37,36' : '120,53,15';
+    ctx.font = `${Math.floor(TILE*1.05)}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(sEmoji, s.x, s.y);
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI*2);
+    ctx.strokeStyle=`rgba(${sColor},${a*0.6})`; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle=`rgba(${sColor},${a*0.15})`; ctx.fill();
+  }
+  ctx.restore();
+
   // Enemies
   for (const e of enemies) {
-    const hasDot=e.dots.length>0, isSlowed=e.slow>0, isVuln=e.vulnerable>0;
+    const hasPoopDot=e.dots.some(d=>d.poop), hasDot=e.dots.length>0, isSlowed=e.slow>0, isVuln=e.vulnerable>0;
+    const r = e.boss ? TILE*0.46 : TILE*0.29;
+    // Shadow
     ctx.fillStyle='rgba(0,0,0,0.22)';
-    ctx.beginPath(); ctx.ellipse(e.x,e.y+TILE*0.3,TILE*0.26,TILE*0.11,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(e.x, e.y+r*0.9, r*0.9, r*0.38, 0, 0, Math.PI*2); ctx.fill();
+    // Boss pulse ring
+    if (e.boss) {
+      const p=0.5+0.5*Math.sin(Date.now()/200);
+      ctx.beginPath(); ctx.arc(e.x,e.y,r+TILE*0.12,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(255,60,0,${0.5+0.4*p})`; ctx.lineWidth=3+p*2; ctx.stroke();
+    }
     if (isVuln) {
       const p=0.5+0.5*Math.sin(Date.now()/120);
-      ctx.beginPath(); ctx.arc(e.x,e.y,TILE*0.4,0,Math.PI*2);
+      ctx.beginPath(); ctx.arc(e.x,e.y,r+TILE*0.14,0,Math.PI*2);
       ctx.strokeStyle=`rgba(168,85,247,${0.45+0.45*p})`; ctx.lineWidth=3; ctx.stroke();
     }
-    ctx.fillStyle = isVuln?'#fde047':isSlowed?'#38bdf8':hasDot?'#a855f7':'#ef4444';
-    ctx.beginPath(); ctx.arc(e.x,e.y,TILE*0.29,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle = isVuln?'#a855f7':isSlowed?'#0284c7':hasDot?'#7c3aed':'#991b1b';
-    ctx.lineWidth=2; ctx.stroke();
-    ctx.font=`${Math.floor(TILE*0.36)}px serif`;
+    ctx.fillStyle = isVuln?'#fde047':isSlowed?'#38bdf8':hasPoopDot?'#92400e':hasDot?'#a855f7':e.boss?'#7f1d1d':'#ef4444';
+    ctx.beginPath(); ctx.arc(e.x,e.y,r,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = isVuln?'#a855f7':isSlowed?'#0284c7':hasPoopDot?'#78350f':hasDot?'#7c3aed':e.boss?'#ff2200':'#991b1b';
+    ctx.lineWidth = e.boss ? 3 : 2; ctx.stroke();
+    ctx.font=`${Math.floor(e.boss ? TILE*0.58 : TILE*0.36)}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('👾',e.x,e.y);
-    const bw=TILE*0.7, bh=3, bx=e.x-bw/2, by=e.y-TILE*0.52;
+    ctx.fillText(e.boss ? '👹' : '👾', e.x, e.y);
+    const bw=e.boss?TILE*1.0:TILE*0.7, bh=e.boss?5:3, bx=e.x-bw/2, by=e.y-(r+TILE*0.22);
     ctx.fillStyle='#222'; ctx.fillRect(bx,by,bw,bh);
     const pct=e.hp/e.maxHp;
     ctx.fillStyle=pct>.6?'#22c55e':pct>.3?'#f59e0b':'#ef4444';
@@ -912,6 +1162,16 @@ function draw() {
 
   // Projectiles
   for (const p of projectiles) {
+    if (p.arc) {
+      const spin = p.progress * Math.PI * 6;
+      const scale = 0.5 + p.progress * (1 - p.progress) * 2;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(spin);
+      ctx.font = `${Math.floor(TILE * 0.6 * Math.max(0.5, scale))}px serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('💩', 0, 0);
+      ctx.restore();
+      continue;
+    }
     const angle=Math.atan2(p.ty-p.y, p.tx-p.x);
     ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(angle);
     if (p.glowColor) {
@@ -923,8 +1183,6 @@ function draw() {
     ctx.fillText(p.icon,0,0);
     if (p.variant==='lightning') {
       ctx.font=`${Math.floor(TILE*0.26)}px serif`; ctx.fillText('⚡',TILE*0.24,-TILE*0.24);
-    } else if (p.special) {
-      ctx.font=`${Math.floor(TILE*0.26)}px serif`; ctx.fillText('💨',TILE*0.24,-TILE*0.24);
     }
     ctx.restore();
   }
@@ -976,6 +1234,25 @@ function draw() {
   }
   ctx.restore();
 
+  // Boss warning overlay
+  if (state==='boss-warning') {
+    const frac = bossWarnTimer / 3.0;
+    const pulse = 0.55 + 0.2 * Math.sin(Date.now() / 180);
+    ctx.fillStyle = `rgba(80,0,0,${0.55 * pulse})`; ctx.fillRect(0,0,W,H);
+    ctx.save();
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font=`bold ${Math.floor(TILE*0.85)}px Segoe UI`;
+    ctx.fillStyle=`rgba(255,60,60,${pulse})`;
+    ctx.fillText('💀 BOSS WAVE', W/2, H/2 - TILE*0.9);
+    ctx.font=`bold ${Math.floor(TILE*0.42)}px Segoe UI`;
+    ctx.fillStyle='#fbbf24';
+    ctx.fillText(`Wave ${wave} — Prepare yourself!`, W/2, H/2);
+    ctx.font=`${Math.floor(TILE*0.35)}px Segoe UI`;
+    ctx.fillStyle='#ddd';
+    ctx.fillText(`Starting in ${Math.ceil(bossWarnTimer)}…`, W/2, H/2 + TILE*0.85);
+    ctx.restore();
+  }
+
   // Overlays
   if (state==='idle' && wave===0) {
     ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,W,H);
@@ -1017,19 +1294,25 @@ function getCoords(clientX, clientY) {
 
 function handleTap(col, row) {
   if (state==='gameover') return;
-  if (selType) {
-    const existing = towers.find(t=>t.col===col&&t.row===row);
-    if (existing) {
-      selType = null;
-      selTId  = existing.id;
-      showTowerInfo(existing);
-    } else {
-      placeTower(col, row);
-    }
+  hideBuildPopup();
+
+  const existing = towers.find(t=>t.col===col&&t.row===row);
+  if (existing) {
+    // Tap on existing tower — always show its info
+    selType = null;
+    selTId  = existing.id;
+    showTowerInfo(existing);
+  } else if (!pathSet.has(`${col},${row}`) && col>=0 && col<COLS && row>=0 && row<ROWS) {
+    // Tap on empty buildable tile — show build popup
+    selTId = null;
+    hidePopup();
+    clearInfo();
+    showBuildPopup(col, row);
   } else {
-    const t = towers.find(t=>t.col===col&&t.row===row);
-    if (t) { selTId=t.id; showTowerInfo(t); }
-    else   { selTId=null; clearInfo(); }
+    // Tap on path or out of bounds — deselect everything
+    selType = null;
+    selTId  = null;
+    clearInfo();
   }
   refreshUI();
 }
