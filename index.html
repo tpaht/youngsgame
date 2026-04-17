@@ -478,9 +478,9 @@ function launchWave() {
   state = 'wave';
   if (isBossWave(wave)) {
     const prev = waveCfg(wave - 1);
-    const bossHp = Math.floor(prev.count * prev.hp * 1.5);
+    const bossHp = Math.floor(prev.count * prev.hp * 1.05);
     const bossReward = Math.floor(prev.count * prev.reward * 2);
-    spawnQueue = [{ hp:bossHp, speed:waveCfg(wave).speed, reward:bossReward, boss:true }];
+    spawnQueue = [{ hp:bossHp, speed:1.5, reward:bossReward, boss:true }];
   } else {
     const cfg = waveCfg(wave);
     spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg}));
