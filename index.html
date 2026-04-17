@@ -507,16 +507,16 @@ function showTowerInfo(t) {
 
   if (t.type==='fist' && t.variant===null) {
     txt.textContent = `👊 Fist | Lv1 | Dmg:${t.damage} | Choose upgrade:`;
-    showBtn('up-smelly',   `🟢 Smelly ($${VARIANTS.smelly.cost})`,   money<VARIANTS.smelly.cost||state==='wave');
-    showBtn('up-bloody',   `🔴 Bloody ($${VARIANTS.bloody.cost})`,   money<VARIANTS.bloody.cost||state==='wave');
+    showBtn('up-smelly',   `🟢 Smelly ($${VARIANTS.smelly.cost})`,   money<VARIANTS.smelly.cost);
+    showBtn('up-bloody',   `🔴 Bloody ($${VARIANTS.bloody.cost})`,   money<VARIANTS.bloody.cost);
   } else if (t.type==='kick' && t.variant===null) {
     txt.textContent = `🦵 Kick | Lv1 | Dmg:${t.damage} | Choose upgrade:`;
-    showBtn('up-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`, money<VARIANTS.lightning.cost||state==='wave');
-    showBtn('up-longkick', `💨 Long Kick ($${VARIANTS.longkick.cost})`,  money<VARIANTS.longkick.cost||state==='wave');
+    showBtn('up-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`, money<VARIANTS.lightning.cost);
+    showBtn('up-longkick', `💨 Long Kick ($${VARIANTS.longkick.cost})`,  money<VARIANTS.longkick.cost);
   } else if (t.type==='spit' && t.variant===null) {
     txt.textContent = `💧 Spit | Lv1 | DoT:${t.damage}/tick | Choose upgrade:`;
-    showBtn('up-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, money<VARIANTS.phlegm.cost||state==='wave');
-    showBtn('up-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, money<VARIANTS.herpes.cost||state==='wave');
+    showBtn('up-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, money<VARIANTS.phlegm.cost);
+    showBtn('up-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, money<VARIANTS.herpes.cost);
   } else if (t.variant!==null) {
     const v = VARIANTS[t.variant];
     const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'💨',phlegm:'🟡',herpes:'🟣'};
@@ -524,7 +524,7 @@ function showTowerInfo(t) {
   } else {
     const ucost = Math.floor(def.cost*0.75);
     txt.textContent = `${def.icon} ${def.name} | Lv${t.level}/3 | Dmg:${t.damage}`;
-    if (t.level<3) showBtn('up-btn', `Upgrade ($${ucost})`, money<ucost||state==='wave');
+    if (t.level<3) showBtn('up-btn', `Upgrade ($${ucost})`, money<ucost);
   }
   showBtn('sell-btn', `Sell ($${sell})`, false);
   showPopup(t);
@@ -560,23 +560,23 @@ function showPopup(t) {
 
   if (t.type==='fist' && t.variant===null) {
     title.textContent = `👊 Fist | Dmg:${t.damage}`;
-    mkBtn('pb-smelly',   `🟢 Smelly ($${VARIANTS.smelly.cost})`,   '#16a34a', money<VARIANTS.smelly.cost||state==='wave',   ()=>{upgradeToVariant('smelly');  showPopup(towers.find(x=>x.id===t.id));});
-    mkBtn('pb-bloody',   `🔴 Bloody ($${VARIANTS.bloody.cost})`,   '#b91c1c', money<VARIANTS.bloody.cost||state==='wave',   ()=>{upgradeToVariant('bloody');  showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-smelly',   `🟢 Smelly ($${VARIANTS.smelly.cost})`,   '#16a34a', money<VARIANTS.smelly.cost,   ()=>{upgradeToVariant('smelly');  showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-bloody',   `🔴 Bloody ($${VARIANTS.bloody.cost})`,   '#b91c1c', money<VARIANTS.bloody.cost,   ()=>{upgradeToVariant('bloody');  showPopup(towers.find(x=>x.id===t.id));});
   } else if (t.type==='kick' && t.variant===null) {
     title.textContent = `🦵 Kick | Dmg:${t.damage}`;
-    mkBtn('pb-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`,'#ca8a04', money<VARIANTS.lightning.cost||state==='wave', ()=>{upgradeToVariant('lightning');showPopup(towers.find(x=>x.id===t.id));});
-    mkBtn('pb-longkick', `💨 Long ($${VARIANTS.longkick.cost})`,    '#0369a1', money<VARIANTS.longkick.cost||state==='wave',  ()=>{upgradeToVariant('longkick'); showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-lightning',`⚡ Lightning ($${VARIANTS.lightning.cost})`,'#ca8a04', money<VARIANTS.lightning.cost, ()=>{upgradeToVariant('lightning');showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-longkick', `💨 Long ($${VARIANTS.longkick.cost})`,    '#0369a1', money<VARIANTS.longkick.cost,  ()=>{upgradeToVariant('longkick'); showPopup(towers.find(x=>x.id===t.id));});
   } else if (t.type==='spit' && t.variant===null) {
     title.textContent = `💧 Spit | DoT:${t.damage}/tick`;
-    mkBtn('pb-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, '#a16207', money<VARIANTS.phlegm.cost||state==='wave', ()=>{upgradeToVariant('phlegm'); showPopup(towers.find(x=>x.id===t.id));});
-    mkBtn('pb-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, '#7e22ce', money<VARIANTS.herpes.cost||state==='wave', ()=>{upgradeToVariant('herpes'); showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-phlegm', `🟡 Phlegm ($${VARIANTS.phlegm.cost})`, '#a16207', money<VARIANTS.phlegm.cost, ()=>{upgradeToVariant('phlegm'); showPopup(towers.find(x=>x.id===t.id));});
+    mkBtn('pb-herpes', `🟣 Herpes ($${VARIANTS.herpes.cost})`, '#7e22ce', money<VARIANTS.herpes.cost, ()=>{upgradeToVariant('herpes'); showPopup(towers.find(x=>x.id===t.id));});
   } else if (t.variant!==null) {
     const icons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'💨',phlegm:'🟡',herpes:'🟣'};
     title.textContent = `${icons[t.variant]} ${VARIANTS[t.variant].name} | Lv2`;
   } else {
     const ucost = Math.floor(def.cost*0.75);
     title.textContent = `${def.icon} ${def.name} | Lv${t.level}/3`;
-    if (t.level<3) mkBtn('pb-upgrade', `Upgrade ($${ucost})`, '#2563eb', money<ucost||state==='wave', ()=>{upgradeSelected(); showPopup(towers.find(x=>x.id===t.id));});
+    if (t.level<3) mkBtn('pb-upgrade', `Upgrade ($${ucost})`, '#2563eb', money<ucost, ()=>{upgradeSelected(); showPopup(towers.find(x=>x.id===t.id));});
   }
   mkBtn('pb-sell', `Sell ($${sell})`, '#dc2626', false, ()=>{ sellSelected(); });
 
