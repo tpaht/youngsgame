@@ -497,7 +497,7 @@ function spawnEnemy(cfg) {
     speed:cfg.speed, baseSpeed:cfg.speed, reward:cfg.reward,
     wpIdx:0,
     x:WAYPOINTS[0].x, y:WAYPOINTS[0].y,
-    dots:[], slow:0, vulnerable:0,
+    dots:[], slow:0, slowMult:VARIANTS.smelly.slowMult, vulnerable:0, vulnMult:VARIANTS.herpes.vulnMult,
     boss: cfg.boss || false
   });
 }
@@ -506,7 +506,7 @@ function spawnEnemy(cfg) {
 //  DAMAGE HELPER
 // ═══════════════════════════════════════════════
 function dealDamage(e, dmg) {
-  const actual = e.vulnerable > 0 ? Math.floor(dmg * VARIANTS.herpes.vulnMult) : dmg;
+  const actual = e.vulnerable > 0 ? Math.floor(dmg * e.vulnMult) : dmg;
   e.hp -= actual;
   return actual;
 }
@@ -573,7 +573,8 @@ function getFusionCandidates(t) {
   const dirs = [{dc:-1,dr:0,name:'Left'},{dc:1,dr:0,name:'Right'},{dc:0,dr:-1,name:'Up'},{dc:0,dr:1,name:'Down'}];
   return dirs.reduce((acc,{dc,dr,name}) => {
     const adj = towers.find(a => a.col===t.col+dc && a.row===t.row+dr &&
-      a.type===t.type && a.level===2 && a.variant!==null && !a.fusion && a.id!==t.id);
+      a.type===t.type && a.level===2 && a.variant!==null && !a.fusion && a.id!==t.id &&
+      a.variant !== t.variant);
     if (adj) acc.push({tower:adj, dir:name});
     return acc;
   }, []);
@@ -603,6 +604,8 @@ function upgradeLv2Tower() {
   t.damage *= 2;
   t.level   = 3;
   t.boosted = true;
+  if (t.variant === 'longkick') t.range = Math.floor(t.range * 1.3);
+  if (t.variant === 'diarrhea') t.fireRate = Math.floor(t.fireRate * 0.5);
   selTId = null; clearInfo(); refreshUI();
   suppressNextTap = true; setTimeout(() => suppressNextTap = false, 450);
 }
@@ -617,8 +620,7 @@ function fuseTower(targetId) {
   sel.fusion   = [sel.variant, con.variant];
   sel.damage   = sel.damage + con.damage;
   sel.fireRate = Math.floor((sel.fireRate + con.fireRate) / 2);
-  const baseRange = Math.max(sel.range, con.range);
-  sel.range    = sel.variant === con.variant ? Math.floor(baseRange * 1.35) : baseRange;
+  sel.range    = Math.max(sel.range, con.range);
   sel.level    = 3;
   towers.splice(towers.findIndex(t => t.id===targetId), 1);
   selTId = null; clearInfo(); refreshUI();
@@ -626,17 +628,26 @@ function fuseTower(targetId) {
 }
 
 function applyVariantEffect(e, vKey, p, boosted) {
-  if (vKey === 'longkick') return;
+  if (vKey === 'longkick') {
+    if (boosted && !e.boss && Math.random() < 0.05) {
+      e.hp = 0;
+      addParticle(e.x, e.y-22, '💀 INSTANT!', '#38bdf8');
+    }
+    return;
+  }
   const v = VARIANTS[vKey];
   if (!v || !v.effect) return;
   const chance = boosted ? Math.min(0.55, v.chance * 2) : v.chance;
   if (Math.random() >= chance) return;
   if (v.effect === 'slow') {
-    e.slow = boosted ? v.slowDuration * 2 : v.slowDuration;
-    addParticle(e.x, e.y-22, '❄ SLOW!', '#67e8f9');
+    const dur = boosted ? v.slowDuration * 2 : v.slowDuration;
+    const mag = boosted ? v.slowMult * 0.5 : v.slowMult;
+    e.slow = dur;
+    e.slowMult = mag;
+    addParticle(e.x, e.y-22, boosted ? '❄❄ FROZEN!' : '❄ SLOW!', '#67e8f9');
   } else if (v.effect === 'splash') {
-    const ratio  = boosted ? Math.min(0.85, v.splashRatio * 1.5) : v.splashRatio;
-    const radius = boosted ? v.splashRadius * 1.4 : v.splashRadius;
+    const ratio  = boosted ? Math.min(1.0, v.splashRatio * 2) : v.splashRatio;
+    const radius = boosted ? v.splashRadius * 2 : v.splashRadius;
     const sd = Math.floor(p.damage * ratio);
     for (const ne of enemies) {
       if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=radius) {
@@ -644,7 +655,7 @@ function applyVariantEffect(e, vKey, p, boosted) {
         addParticle(ne.x, ne.y-11, `-${nd}`, '#fca5a5');
       }
     }
-    addParticle(e.x, e.y-22, '💥 SPLASH!', '#f87171');
+    addParticle(e.x, e.y-22, boosted ? '💥💥 MEGA SPLASH!' : '💥 SPLASH!', '#f87171');
   } else if (v.effect === 'chain') {
     const chainCount = boosted ? v.chainCount * 3 : v.chainCount;
     let from = e, cdmg = p.damage;
@@ -667,15 +678,19 @@ function applyVariantEffect(e, vKey, p, boosted) {
     addParticle(e.x, e.y-22, '⚡ CHAIN!', '#fbbf24');
   } else if (v.effect === 'aoe_slow') {
     const dur    = boosted ? v.slowDuration * 2 : v.slowDuration;
-    const radius = boosted ? v.slowRadius * 1.4 : v.slowRadius;
-    e.slow = dur;
+    const radius = boosted ? v.slowRadius * 2   : v.slowRadius;
+    const mag    = boosted ? v.slowMult * 0.5   : v.slowMult;
+    e.slow = dur; e.slowMult = mag;
     for (const ne of enemies) {
-      if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=radius) ne.slow = dur;
+      if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=radius) {
+        ne.slow = dur; ne.slowMult = mag;
+      }
     }
-    addParticle(e.x, e.y-22, '🟡 PHLEGM!', '#eab308');
+    addParticle(e.x, e.y-22, boosted ? '🟡🟡 TOXIC PHLEGM!' : '🟡 PHLEGM!', '#eab308');
   } else if (v.effect === 'vulnerable') {
     e.vulnerable = boosted ? v.vulnDuration * 2 : v.vulnDuration;
-    addParticle(e.x, e.y-22, '🦠 INFECTED!', '#a855f7');
+    e.vulnMult   = boosted ? v.vulnMult * 2     : v.vulnMult;
+    addParticle(e.x, e.y-22, boosted ? '🦠🦠 EPIDEMIC!' : '🦠 INFECTED!', '#a855f7');
   }
 }
 
@@ -832,14 +847,28 @@ function getSkillDesc(vKey, boosted) {
   const v = VARIANTS[vKey];
   const pct = n => Math.round(n * 100);
   const ch = boosted ? Math.min(55, pct(v.chance) * 2) : pct(v.chance);
-  if (vKey==='smelly')       return `❄ Slow ${ch}% · ${boosted?2:1}s duration`;
-  if (vKey==='bloody')       return `💥 Splash ${ch}% · ${boosted?'1.4×':'1×'} radius`;
+  if (vKey==='smelly')       return boosted
+    ? `❄❄ Slow ${ch}% · 2s · 2× intensity`
+    : `❄ Slow ${ch}% · 1s`;
+  if (vKey==='bloody')       return boosted
+    ? `💥 Splash ${ch}% · 2× area · 2× dmg`
+    : `💥 Splash ${ch}%`;
   if (vKey==='lightning')    return `⚡ Chain ${ch}% → ${boosted?6:2} enemies`;
-  if (vKey==='longkick')     return `🦵 Farthest target · ${boosted?'1.35×':'1×'} range`;
-  if (vKey==='phlegm')       return `🟡 AoE Slow ${ch}% · ${boosted?5:2.5}s`;
-  if (vKey==='herpes')       return `🦠 Vuln ${ch}% · 2× dmg ${boosted?8:4}s`;
-  if (vKey==='diarrhea')     return `💦 Fast fire · ${boosted?6:3}s splat`;
-  if (vKey==='constipation') return `🪨 ${boosted?12:6}s splat · ${boosted?'2.7×':'1.8×'} DoT`;
+  if (vKey==='longkick')     return boosted
+    ? `🦵 Farthest · extra range · 5% instant kill`
+    : `🦵 Farthest target`;
+  if (vKey==='phlegm')       return boosted
+    ? `🟡 AoE Slow ${ch}% · 5s · 2× area · 2× intensity`
+    : `🟡 AoE Slow ${ch}% · 2.5s`;
+  if (vKey==='herpes')       return boosted
+    ? `🦠 Vuln ${ch}% · 4× dmg · 8s`
+    : `🦠 Vuln ${ch}% · 2× dmg · 4s`;
+  if (vKey==='diarrhea')     return boosted
+    ? `💦 2× fire rate · 2× DoT`
+    : `💦 Fast fire · 3s splat`;
+  if (vKey==='constipation') return boosted
+    ? `🪨 6s splat · 2× DoT · 2× area`
+    : `🪨 6s splat · 1.8× DoT`;
   return v.desc || '';
 }
 
@@ -851,10 +880,7 @@ function towerStatsHTML(t) {
   if (t.fusion) {
     nameLine  = `✦ ${fusedName(t.fusion[0],t.fusion[1],t.type)} <span style="color:#c4b5fd">(Lv3)</span>`;
     const [v1k,v2k] = t.fusion;
-    const same = v1k === v2k;
-    skillLine = same
-      ? getSkillDesc(v1k, true)
-      : `${getSkillDesc(v1k,false)}<br>${getSkillDesc(v2k,false)}`;
+    skillLine = `${getSkillDesc(v1k,false)}<br>${getSkillDesc(v2k,false)}`;
   } else if (t.variant) {
     const vicons = {smelly:'🟢',bloody:'🔴',lightning:'⚡',longkick:'🦵',phlegm:'🟡',herpes:'🟣',diarrhea:'💦',constipation:'🪨'};
     const lvColor = t.boosted ? '#c4b5fd' : '#fbbf24';
@@ -1002,7 +1028,7 @@ function update(dt) {
     }
 
     if (e.slow>0) e.slow -= dt*1000;
-    const spd = e.slow>0 ? e.baseSpeed*VARIANTS.smelly.slowMult : e.baseSpeed;
+    const spd = e.slow>0 ? e.baseSpeed*e.slowMult : e.baseSpeed;
 
     const wp = WAYPOINTS[e.wpIdx+1];
     if (!wp) {
@@ -1025,8 +1051,9 @@ function update(dt) {
     const vDef = t.variant ? VARIANTS[t.variant] : null;
 
     const hasLongkick = t.variant==='longkick' || (t.fusion && t.fusion.includes('longkick'));
-    const lkDouble    = t.fusion && t.fusion[0]==='longkick' && t.fusion[1]==='longkick';
-    const lkChance    = lkDouble ? Math.min(0.5, VARIANTS.longkick.chance*2) : VARIANTS.longkick.chance;
+    const lkChance    = (t.boosted && t.variant==='longkick')
+      ? Math.min(0.5, VARIANTS.longkick.chance * 2)
+      : VARIANTS.longkick.chance;
     const isLong      = hasLongkick && Math.random() < lkChance;
     let best=null, bestVal = isLong ? -Infinity : Infinity;
     for (const e of enemies) {
@@ -1040,21 +1067,21 @@ function update(dt) {
     if (t.type === 'poop') {
       const dist = Math.hypot(best.x-t.x, best.y-t.y);
       const flightTime = 0.8 + dist/(TILE*14);
-      let projIcon, splatDur, splatDotDmg;
+      const BASE_RADIUS = TILE * 0.88;
+      let projIcon, splatDur, splatDotDmg, splatRadius = BASE_RADIUS;
       if (t.fusion) {
         const [f1, f2] = t.fusion;
         const fv1 = VARIANTS[f1], fv2 = VARIANTS[f2];
-        const same = f1 === f2;
         projIcon    = fv1.projIcon ?? '💩';
-        splatDur    = same ? (fv1.splatDuration||3) * 2 : Math.max(fv1.splatDuration||3, fv2.splatDuration||3);
-        const dMult = same ? (fv1.dotDmgMult||1) * 1.5 : Math.max(fv1.dotDmgMult||1, fv2.dotDmgMult||1);
+        splatDur    = Math.max(fv1.splatDuration||3, fv2.splatDuration||3);
+        const dMult = Math.max(fv1.dotDmgMult||1, fv2.dotDmgMult||1);
         splatDotDmg = Math.floor(t.damage * dMult);
       } else {
         const pv = t.variant ? VARIANTS[t.variant] : null;
         projIcon    = pv?.projIcon  ?? '💩';
         splatDur    = pv?.splatDuration ?? 3.0;
         splatDotDmg = pv ? Math.floor(t.damage * pv.dotDmgMult) : t.damage;
-        if (t.boosted) { splatDur *= 2; }
+        if (t.boosted && t.variant === 'constipation') splatRadius = BASE_RADIUS * 2;
       }
       projectiles.push({
         id:pId++, done:false, arc:true,
@@ -1063,7 +1090,7 @@ function update(dt) {
         tx:best.x, ty:best.y,
         progress:0, duration:flightTime,
         arcHeight: Math.min(dist*0.55, TILE*5.5),
-        dotDmg:t.damage, splatDuration:splatDur, splatDotDmg,
+        dotDmg:t.damage, splatDuration:splatDur, splatDotDmg, splatRadius,
         type:'poop', icon:projIcon, variant:t.variant, fusion:t.fusion||null,
         boosted:t.boosted||false,
         speed:0, dot:false, special:false, glowColor:null, damage:0
@@ -1109,7 +1136,7 @@ function update(dt) {
       p.progress += dt / p.duration;
       if (p.progress >= 1) {
         p.progress = 1; p.done = true;
-        poopSplats.push({ x:p.x2, y:p.y2, life:p.splatDuration, maxLife:p.splatDuration, radius:TILE*0.88, dotDmg:p.splatDotDmg, variant:p.variant });
+        poopSplats.push({ x:p.x2, y:p.y2, life:p.splatDuration, maxLife:p.splatDuration, radius:p.splatRadius, dotDmg:p.splatDotDmg, variant:p.variant });
         playSound('poop');
         addParticle(p.x2, p.y2-10, '💩 SPLAT!', '#92400e');
       }
@@ -1133,10 +1160,9 @@ function update(dt) {
         // Variant / fusion effects
         if (p.fusion) {
           const [v1k, v2k] = p.fusion;
-          const same = v1k === v2k;
-          applyVariantEffect(e, v1k, p, same);
-          if (!same) applyVariantEffect(e, v2k, p, false);
-        } else if (p.variant && p.variant !== 'longkick') {
+          applyVariantEffect(e, v1k, p, false);
+          applyVariantEffect(e, v2k, p, false);
+        } else if (p.variant) {
           applyVariantEffect(e, p.variant, p, p.boosted || false);
         }
         if (p.special) addParticle(e.x, e.y-22, '🦵 LONG KICK!', '#38bdf8');
@@ -1326,7 +1352,7 @@ function draw() {
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(spin);
       ctx.font = `${Math.floor(TILE * 0.6 * Math.max(0.5, scale))}px serif`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('💩', 0, 0);
+      ctx.fillText(p.icon || '💩', 0, 0);
       ctx.restore();
       continue;
     }
