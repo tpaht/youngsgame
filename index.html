@@ -121,37 +121,19 @@
       touch-action:none;
     }
 
-    /* ── Tower select + Wave ── */
+    /* ── Wave bar ── */
     #tower-bar {
       background:#1a1a2e;
-      padding:7px 8px;
+      padding:7px 10px;
       display:flex;
-      align-items:stretch;
-      gap:6px;
+      align-items:center;
+      gap:10px;
       border-top:2px solid #2d2d4e;
       flex-shrink:0;
     }
-    .tbtn {
-      flex:1;
-      padding:8px 4px;
-      border:2px solid #444;
-      border-radius:8px;
-      background:#222;
-      color:#eee;
-      cursor:pointer;
-      font-size:0.68rem;
-      text-align:center;
-      user-select:none;
-      -webkit-tap-highlight-color:transparent;
-      transition:border-color .12s, background .12s;
-    }
-    .tbtn .ico { font-size:1.5rem; display:block; line-height:1.3; }
-    .tbtn .cst { color:#fbbf24; }
-    .tbtn.sel          { border-color:#fff; background:#2d2d4e; }
-    .tbtn.unaffordable { opacity:.38; }
 
     #wave-btn {
-      padding:8px 14px;
+      padding:9px 18px;
       background:#16a34a;
       border:none; border-radius:8px;
       color:#fff; font-size:0.9rem; font-weight:bold;
@@ -159,6 +141,15 @@
       -webkit-tap-highlight-color:transparent;
     }
     #wave-btn:disabled { background:#444; cursor:not-allowed; }
+
+    #wave-info {
+      flex:1;
+      font-size:0.68rem;
+      color:#bbb;
+      line-height:1.4;
+    }
+    #wave-info .wi-title { color:#fbbf24; font-weight:bold; font-size:0.72rem; }
+    #wave-info .wi-boss  { color:#ef4444; font-weight:bold; }
 
     /* ── Info / upgrade panel ── */
     #info-panel {
@@ -208,19 +199,8 @@
   <canvas id="c"></canvas>
 
   <div id="tower-bar">
-    <div class="tbtn" id="btn-fist" onclick="selectType('fist')">
-      <span class="ico">👊</span><span class="cst">$10</span>
-    </div>
-    <div class="tbtn" id="btn-kick" onclick="selectType('kick')">
-      <span class="ico">🦶</span><span class="cst">$15</span>
-    </div>
-    <div class="tbtn" id="btn-spit" onclick="selectType('spit')">
-      <span class="ico">💧</span><span class="cst">$20</span>
-    </div>
-    <div class="tbtn" id="btn-poop" onclick="selectType('poop')">
-      <span class="ico">💩</span><span class="cst">$30</span>
-    </div>
     <button id="wave-btn" onclick="sendWave()">▶ Wave 1</button>
+    <div id="wave-info"><span class="wi-title">Next wave</span><br><span id="wave-info-detail">—</span></div>
   </div>
 
   <div id="info-panel">
@@ -591,16 +571,33 @@ function refreshUI() {
   document.getElementById('s-money').textContent = money;
   document.getElementById('s-lives').textContent = lives;
   document.getElementById('s-wave').textContent  = wave;
-  ['fist','kick','spit','poop'].forEach(type => {
-    const b = document.getElementById(`btn-${type}`);
-    b.classList.toggle('sel', selType===type);
-    b.classList.toggle('unaffordable', money<DEFS[type].cost && selType!==type);
-  });
-  const wb = document.getElementById('wave-btn');
-  if (state==='wave')          { wb.textContent='⏳ In progress…'; wb.disabled=true; }
-  else if (state==='boss-warning') { wb.textContent='⚠️ Boss incoming!'; wb.disabled=true; }
-  else if (state==='gameover') { wb.textContent='Game Over'; wb.disabled=true; }
-  else { wb.textContent = isBossWave(wave+1) ? `💀 Wave ${wave+1} — BOSS` : `▶ Wave ${wave+1}`; wb.disabled=false; }
+
+  const wb   = document.getElementById('wave-btn');
+  const info = document.getElementById('wave-info-detail');
+  const next = wave + 1;
+
+  if (state==='wave') {
+    wb.textContent = '⏳ In progress…'; wb.disabled = true;
+    info.innerHTML = '';
+  } else if (state==='boss-warning') {
+    wb.textContent = '⚠️ Boss incoming!'; wb.disabled = true;
+    info.innerHTML = `<span class="wi-boss">💀 Boss wave — prepare!</span>`;
+  } else if (state==='gameover') {
+    wb.textContent = 'Game Over'; wb.disabled = true;
+    info.innerHTML = '';
+  } else {
+    const isBoss = isBossWave(next);
+    wb.textContent = isBoss ? `💀 Wave ${next}` : `▶ Wave ${next}`;
+    wb.disabled = false;
+    if (isBoss) {
+      const prev = waveCfg(next - 1);
+      const bossHp = Math.floor(prev.count * prev.hp * 1.5);
+      info.innerHTML = `<span class="wi-boss">💀 BOSS — ${bossHp.toLocaleString()} HP</span>`;
+    } else {
+      const cfg = waveCfg(next);
+      info.innerHTML = `👾 ×${cfg.count} &nbsp;❤️ ${cfg.hp.toLocaleString()} &nbsp;💨 ${cfg.speed}`;
+    }
+  }
 }
 
 function hideAllUpgrades() {
@@ -772,20 +769,7 @@ function showPopup(t) {
   popup.style.top  = top  + 'px';
 }
 
-function selectType(type) {
-  if (state==='gameover') return;
-  selType = selType===type ? null : type;
-  selTId  = null;
-  hidePopup();
-  hideBuildPopup();
-  if (selType) {
-    const def = DEFS[selType];
-    document.getElementById('info-txt').textContent = `${def.icon} ${def.name} — $${def.cost} | ${def.desc}`;
-    hideAllUpgrades();
-    document.getElementById('sell-btn').style.display = 'none';
-  } else { clearInfo(); }
-  refreshUI();
-}
+
 
 // ═══════════════════════════════════════════════
 //  PARTICLES
