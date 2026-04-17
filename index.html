@@ -4,6 +4,9 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <title>Tower Defense</title>
+  <meta property="og:title" content="Tower Defense"/>
+  <meta property="og:description" content="A mobile tower defense game. Place towers, survive waves!"/>
+  <meta property="og:type" content="website"/>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -257,6 +260,68 @@ const VARIANTS = {
 };
 
 // ═══════════════════════════════════════════════
+//  AUDIO
+// ═══════════════════════════════════════════════
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function resumeAudio() { if (audioCtx.state === 'suspended') audioCtx.resume(); }
+document.addEventListener('click', resumeAudio, { once: true });
+document.addEventListener('touchstart', resumeAudio, { once: true });
+
+function playSound(type) {
+  try {
+    const g = audioCtx.createGain();
+    g.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+
+    if (type === 'fist') {
+      // Short punchy thud
+      const o = audioCtx.createOscillator();
+      o.connect(g);
+      o.type = 'sine';
+      o.frequency.setValueAtTime(120, now);
+      o.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+      g.gain.setValueAtTime(0.55, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      o.start(now); o.stop(now + 0.1);
+    } else if (type === 'kick') {
+      // Deep kick thump
+      const o = audioCtx.createOscillator();
+      o.connect(g);
+      o.type = 'sine';
+      o.frequency.setValueAtTime(200, now);
+      o.frequency.exponentialRampToValueAtTime(35, now + 0.18);
+      g.gain.setValueAtTime(0.7, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      o.start(now); o.stop(now + 0.22);
+    } else if (type === 'spit') {
+      // Wet splat
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.12, audioCtx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      const f = audioCtx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = 800; f.Q.value = 0.8;
+      src.connect(f); f.connect(g);
+      g.gain.setValueAtTime(0.35, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      src.start(now);
+    } else if (type === 'death') {
+      // Enemy death: descending squeal + noise burst
+      const o = audioCtx.createOscillator();
+      o.connect(g);
+      o.type = 'square';
+      o.frequency.setValueAtTime(520, now);
+      o.frequency.exponentialRampToValueAtTime(80, now + 0.25);
+      g.gain.setValueAtTime(0.28, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      o.start(now); o.stop(now + 0.28);
+    }
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
 //  GAME STATE
 // ═══════════════════════════════════════════════
 let money=150, lives=20, wave=0;
@@ -490,6 +555,7 @@ function update(dt) {
 
     if (e.hp<=0) {
       e.alive=false; money+=e.reward;
+      playSound('death');
       addParticle(e.x, e.y-10, `+$${e.reward}`, '#fbbf24');
       refreshUI(); continue;
     }
@@ -525,6 +591,7 @@ function update(dt) {
     }
     if (!best) continue;
     t.lastShot = 0;
+    playSound(t.type);
 
     const projDmg  = isLong ? Math.floor(t.damage*VARIANTS.longkick.farDmgMult) : t.damage;
     const projGlow = isLong ? '#38bdf8' : (vDef ? vDef.glowColor : null);
