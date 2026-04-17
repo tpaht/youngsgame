@@ -452,10 +452,14 @@ let suppressNextTap=false;
 //  WAVE SYSTEM
 // ═══════════════════════════════════════════════
 function waveCfg(n) {
-  const PIVOT = 6;
-  const hp = n <= PIVOT
-    ? Math.floor(70 * Math.pow(1.35, n))
-    : Math.floor(70 * Math.pow(1.35, PIVOT) * Math.pow(1.18, n - PIVOT));
+  const PIVOT = 6, PIVOT2 = 20;
+  let hp;
+  if (n <= PIVOT)
+    hp = Math.floor(70 * Math.pow(1.35, n));
+  else if (n <= PIVOT2)
+    hp = Math.floor(70 * Math.pow(1.35, PIVOT) * Math.pow(1.18, n - PIVOT));
+  else
+    hp = Math.floor(70 * Math.pow(1.35, PIVOT) * Math.pow(1.18, PIVOT2 - PIVOT) * Math.pow(1.25, n - PIVOT2));
   const spd = n <= PIVOT
     ? 44 + n * 3
     : (44 + PIVOT * 3) + Math.floor((n - PIVOT) * 1.5);
@@ -526,7 +530,8 @@ function placeTower(col, row) {
     id:tId++, type:selType, col, row,
     x:col*TILE+TILE/2, y:row*TILE+TILE/2,
     level:1, variant:null,
-    damage:def.damage, range:def.range, fireRate:def.fireRate, lastShot:0
+    damage:def.damage, range:def.range, fireRate:def.fireRate, lastShot:0,
+    totalSpent:def.cost
   });
   refreshUI();
 }
@@ -552,6 +557,7 @@ function upgradeToVariant(key) {
   if (money < v.cost) return;
   money -= v.cost;
   t.variant = key; t.level = 2;
+  t.totalSpent = (t.totalSpent || 0) + v.cost;
   if (v.rangeMult)    t.range    = Math.floor(t.range    * v.rangeMult);
   if (v.fireRateMult) t.fireRate = Math.floor(t.fireRate * v.fireRateMult);
   selTId = null; clearInfo(); refreshUI();
@@ -562,7 +568,7 @@ function sellSelected() {
   const idx = towers.findIndex(t=>t.id===selTId);
   if (idx===-1) return;
   const t = towers[idx];
-  money += t.fusion ? DEFS[t.type].cost * 2 : DEFS[t.type].cost;
+  money += t.totalSpent != null ? t.totalSpent : (t.fusion ? DEFS[t.type].cost * 2 : DEFS[t.type].cost);
   towers.splice(idx,1);
   selTId = null; clearInfo(); refreshUI();
 }
@@ -601,6 +607,7 @@ function upgradeLv2Tower() {
   const cost = lv2UpgradeCost(t);
   if (money < cost) return;
   money -= cost;
+  t.totalSpent = (t.totalSpent || 0) + cost;
   t.damage *= 2;
   t.level   = 3;
   t.boosted = true;
@@ -617,6 +624,7 @@ function fuseTower(targetId) {
   const fuseCost = VARIANTS[sel.variant].cost;
   if (money < fuseCost) return;
   money -= fuseCost;
+  sel.totalSpent = (sel.totalSpent || 0) + (con.totalSpent || 0) + fuseCost;
   sel.fusion   = [sel.variant, con.variant];
   sel.damage   = sel.damage + con.damage;
   sel.fireRate = Math.floor((sel.fireRate + con.fireRate) / 2);
@@ -625,6 +633,72 @@ function fuseTower(targetId) {
   towers.splice(towers.findIndex(t => t.id===targetId), 1);
   selTId = null; clearInfo(); refreshUI();
   suppressNextTap = true; setTimeout(() => suppressNextTap = false, 450);
+}
+
+// ── Lv4 helpers ──
+function lv4FusionCost(t) {
+  const variants = t.fusion ? t.fusion : (t.variant ? [t.variant] : []);
+  return variants.reduce((sum, vk) => sum + VARIANTS[vk].cost, 0);
+}
+
+function lv3FusedUpgradeCost(t) {
+  return (t.totalSpent || 0) + lv4FusionCost(t);
+}
+
+function getFusionCandidatesLv3(t) {
+  if (t.level !== 3) return [];
+  const dirs = [{dc:-1,dr:0,name:'Left'},{dc:1,dr:0,name:'Right'},{dc:0,dr:-1,name:'Up'},{dc:0,dr:1,name:'Down'}];
+  return dirs.reduce((acc,{dc,dr,name}) => {
+    const adj = towers.find(a => a.col===t.col+dc && a.row===t.row+dr &&
+      a.type===t.type && a.level===3 && a.id!==t.id);
+    if (adj) acc.push({tower:adj, dir:name});
+    return acc;
+  }, []);
+}
+
+function fuseLv3Tower(targetId) {
+  const sel = towers.find(t => t.id===selTId);
+  const con = towers.find(t => t.id===targetId);
+  if (!sel || !con || sel.type !== con.type) return;
+  const fuseCost = lv4FusionCost(sel);
+  if (money < fuseCost) return;
+  money -= fuseCost;
+  const selV = sel.fusion ? sel.fusion : (sel.variant ? [sel.variant] : []);
+  const conV = con.fusion ? con.fusion : (con.variant ? [con.variant] : []);
+  const allV = [...new Set([...selV, ...conV])];
+  sel.fusion   = allV;
+  sel.variant  = null;
+  sel.damage   = sel.damage + con.damage;
+  sel.fireRate = Math.floor((sel.fireRate + con.fireRate) / 2);
+  sel.range    = Math.max(sel.range, con.range);
+  sel.level    = 4;
+  sel.boosted  = sel.boosted && con.boosted;
+  sel.totalSpent = (sel.totalSpent || 0) + (con.totalSpent || 0) + fuseCost;
+  towers.splice(towers.findIndex(t => t.id===targetId), 1);
+  selTId = null; clearInfo(); refreshUI();
+  suppressNextTap = true; setTimeout(() => suppressNextTap = false, 450);
+}
+
+function upgradeLv3FusedTower() {
+  const t = towers.find(t => t.id===selTId);
+  if (!t || t.level !== 3 || !t.fusion) return;
+  const cost = lv3FusedUpgradeCost(t);
+  if (money < cost) return;
+  money -= cost;
+  t.totalSpent += cost;
+  t.damage *= 2;
+  t.level  = 4;
+  t.boosted = true;
+  selTId = null; clearInfo(); refreshUI();
+  suppressNextTap = true; setTimeout(() => suppressNextTap = false, 450);
+}
+
+function fusedNameLv4(variants, baseType) {
+  const tName = {fist:'Fist',kick:'Kick',spit:'Spit',poop:'Poop'}[baseType];
+  const strip = s => VARIANTS[s].name.replace(/ ?(Fist|Kick|Spit|Poop)$/,'');
+  if (variants.length === 1) return `Ultimate ${strip(variants[0])} ${tName}`;
+  if (variants.length === 2) return `Ultimate ${strip(variants[0])} ${strip(variants[1])} ${tName}`;
+  return `Legendary ${variants.map(strip).join(' ')} ${tName}`;
 }
 
 function applyVariantEffect(e, vKey, p, boosted) {
@@ -764,6 +838,9 @@ function showTowerInfo(t) {
     txt.textContent = `💩 Poop | Lv1 | DoT:${t.damage}/tick | Choose upgrade:`;
     showBtn('up-diarrhea',     `💦 Diarrhea ($${VARIANTS.diarrhea.cost})`,         money<VARIANTS.diarrhea.cost);
     showBtn('up-constipation', `🪨 Constipation ($${VARIANTS.constipation.cost})`, money<VARIANTS.constipation.cost);
+  } else if (t.fusion && t.level === 4) {
+    const lbl = t.boosted ? 'Lv4 ⬆' : 'Lv4';
+    txt.textContent = `⚜ ${fusedNameLv4(t.fusion, t.type)} | ${lbl} | Dmg:${t.damage}`;
   } else if (t.fusion) {
     txt.textContent = `✦ ${fusedName(t.fusion[0],t.fusion[1],t.type)} | Lv3 | Dmg:${t.damage}`;
   } else if (t.variant!==null) {
@@ -776,7 +853,7 @@ function showTowerInfo(t) {
     txt.textContent = `${def.icon} ${def.name} | Lv${t.level}/3 | Dmg:${t.damage}`;
     if (t.level<3) showBtn('up-btn', `Upgrade ($${ucost})`, money<ucost);
   }
-  const sell = t.fusion ? DEFS[t.type].cost * 2 : def.cost;
+  const sell = t.totalSpent != null ? t.totalSpent : (t.fusion ? DEFS[t.type].cost * 2 : def.cost);
   showBtn('sell-btn', `Sell ($${sell})`, false);
   showPopup(t);
 }
@@ -877,7 +954,12 @@ function towerStatsHTML(t) {
   const spd  = (1000 / t.fireRate).toFixed(1);
   const rng  = (t.range / TILE).toFixed(1);
   let nameLine, skillLine;
-  if (t.fusion) {
+  if (t.fusion && t.level === 4) {
+    const lvColor = t.boosted ? '#ffd700' : '#c4b5fd';
+    const lvLabel = t.boosted ? 'Lv4 ⬆' : 'Lv4';
+    nameLine  = `⚜ ${fusedNameLv4(t.fusion, t.type)} <span style="color:${lvColor}">(${lvLabel})</span>`;
+    skillLine = t.fusion.map(vk => getSkillDesc(vk, t.boosted||false)).join('<br>');
+  } else if (t.fusion) {
     nameLine  = `✦ ${fusedName(t.fusion[0],t.fusion[1],t.type)} <span style="color:#c4b5fd">(Lv3)</span>`;
     const [v1k,v2k] = t.fusion;
     skillLine = `${getSkillDesc(v1k,false)}<br>${getSkillDesc(v2k,false)}`;
@@ -901,7 +983,7 @@ function showPopup(t) {
   const title = document.getElementById('popup-title');
   const btns  = document.getElementById('popup-btns');
   const def   = DEFS[t.type];
-  const sell  = t.fusion ? DEFS[t.type].cost * 2 : def.cost;
+  const sell  = t.totalSpent != null ? t.totalSpent : (t.fusion ? DEFS[t.type].cost * 2 : def.cost);
   btns.innerHTML = '';
   title.innerHTML = towerStatsHTML(t);
 
@@ -937,6 +1019,28 @@ function showPopup(t) {
         const fuseCost = VARIANTS[t.variant].cost;
         mkBtn(`pb-fuse-${adjId}`, `⚗ Fuse ${dir}: ${name} ($${fuseCost})`, '#7c3aed', money<fuseCost, ()=>{ fuseTower(adjId); });
       }
+    } else if (t.level === 3 && t.boosted) {
+      const candidates = getFusionCandidatesLv3(t);
+      for (const {tower:adj, dir} of candidates) {
+        const adjV = adj.fusion ? adj.fusion : (adj.variant ? [adj.variant] : []);
+        const allV = [...new Set([[t.variant], ...adjV].flat())];
+        const name = fusedNameLv4(allV, t.type);
+        const adjId = adj.id;
+        const fCost = lv4FusionCost(t);
+        mkBtn(`pb-fuse4-${adjId}`, `⚜ Lv4 Fuse ${dir}: ${name} ($${fCost})`, '#4c1d95', money<fCost, ()=>{ fuseLv3Tower(adjId); });
+      }
+    }
+  } else if (t.fusion && t.level === 3) {
+    const upgCost = lv3FusedUpgradeCost(t);
+    mkBtn('pb-lv4-upgrade', `⬆ Upgrade Lv4 ($${upgCost})`, '#1e3a8a', money<upgCost, ()=>{ upgradeLv3FusedTower(); });
+    const candidates = getFusionCandidatesLv3(t);
+    for (const {tower:adj, dir} of candidates) {
+      const adjV = adj.fusion ? adj.fusion : (adj.variant ? [adj.variant] : []);
+      const allV = [...new Set([...t.fusion, ...adjV])];
+      const name = fusedNameLv4(allV, t.type);
+      const adjId = adj.id;
+      const fCost = lv4FusionCost(t);
+      mkBtn(`pb-fuse4-${adjId}`, `⚜ Lv4 Fuse ${dir}: ${name} ($${fCost})`, '#4c1d95', money<fCost, ()=>{ fuseLv3Tower(adjId); });
     }
   } else if (!t.fusion) {
     const ucost = Math.floor(def.cost*0.75);
@@ -1136,7 +1240,7 @@ function update(dt) {
       p.progress += dt / p.duration;
       if (p.progress >= 1) {
         p.progress = 1; p.done = true;
-        poopSplats.push({ x:p.x2, y:p.y2, life:p.splatDuration, maxLife:p.splatDuration, radius:p.splatRadius, dotDmg:p.splatDotDmg, variant:p.variant });
+        poopSplats.push({ x:p.x2, y:p.y2, life:p.splatDuration, maxLife:p.splatDuration, radius:p.splatRadius, dotDmg:p.splatDotDmg, variant:p.variant, fusion:p.fusion });
         playSound('poop');
         addParticle(p.x2, p.y2-10, '💩 SPLAT!', '#92400e');
       }
@@ -1159,9 +1263,7 @@ function update(dt) {
         }
         // Variant / fusion effects
         if (p.fusion) {
-          const [v1k, v2k] = p.fusion;
-          applyVariantEffect(e, v1k, p, false);
-          applyVariantEffect(e, v2k, p, false);
+          for (const vKey of p.fusion) applyVariantEffect(e, vKey, p, p.boosted || false);
         } else if (p.variant) {
           applyVariantEffect(e, p.variant, p, p.boosted || false);
         }
@@ -1263,7 +1365,7 @@ function draw() {
     const rx = t.col*TILE+5, ry = t.row*TILE+5, rw = TILE-10, rh = TILE-10;
     if (t.fusion) {
       const c1 = VARIANTS[t.fusion[0]].glowColor;
-      const c2 = VARIANTS[t.fusion[1]].glowColor;
+      const c2 = VARIANTS[t.fusion[t.fusion.length-1]].glowColor;
       if (c1 === c2) {
         ctx.fillStyle = c1;
         ctx.beginPath(); ctx.roundRect(rx,ry,rw,rh,4); ctx.fill();
@@ -1276,23 +1378,40 @@ function draw() {
         ctx.restore();
       }
       ctx.save();
-      ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1.5;
-      ctx.shadowColor='#fff'; ctx.shadowBlur=6;
+      if (t.level >= 4) {
+        ctx.strokeStyle='rgba(255,215,0,0.9)'; ctx.lineWidth=2;
+        ctx.shadowColor='#ffd700'; ctx.shadowBlur=10;
+      } else {
+        ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1.5;
+        ctx.shadowColor='#fff'; ctx.shadowBlur=6;
+      }
       ctx.beginPath(); ctx.roundRect(rx,ry,rw,rh,4); ctx.stroke();
       ctx.restore();
     } else {
       ctx.fillStyle = t.variant ? VARIANTS[t.variant].glowColor : def.color;
       ctx.beginPath(); ctx.roundRect(rx,ry,rw,rh,4); ctx.fill();
+      if (t.level >= 3 && t.boosted) {
+        ctx.save();
+        ctx.strokeStyle='rgba(196,181,253,0.7)'; ctx.lineWidth=1.5;
+        ctx.shadowColor='#c4b5fd'; ctx.shadowBlur=5;
+        ctx.beginPath(); ctx.roundRect(rx,ry,rw,rh,4); ctx.stroke();
+        ctx.restore();
+      }
     }
     ctx.font=`${Math.floor(TILE*0.48)}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     const tIcon = t.fusion ? (VARIANTS[t.fusion[0]].icon || def.icon)
                            : (t.variant && VARIANTS[t.variant].icon) ? VARIANTS[t.variant].icon : def.icon;
     ctx.fillText(tIcon, t.x, t.y);
-    if (t.level>1) {
-      ctx.fillStyle = t.fusion ? '#c4b5fd' : '#fbbf24';
-      ctx.font=`${Math.floor(TILE*0.22)}px serif`;
-      ctx.fillText(t.fusion ? '✦✦' : '★'.repeat(t.level-1), t.x, t.row*TILE+TILE-Math.floor(TILE*0.15));
+    if (t.level > 1) {
+      const isLv4 = t.level >= 4;
+      ctx.fillStyle = isLv4 ? '#ffd700' : t.fusion ? '#c4b5fd' : '#fbbf24';
+      ctx.font = `${Math.floor(TILE*0.22)}px serif`;
+      let indicator;
+      if (isLv4) indicator = t.fusion ? '⚜' : '★★★';
+      else if (t.fusion) indicator = '✦✦';
+      else indicator = '★'.repeat(t.level - 1);
+      ctx.fillText(indicator, t.x, t.row*TILE+TILE-Math.floor(TILE*0.15));
     }
   }
 
@@ -1301,8 +1420,10 @@ function draw() {
   for (const s of poopSplats) {
     const a = s.life / s.maxLife;
     ctx.globalAlpha = a * 0.85;
-    const sEmoji = s.variant === 'diarrhea' ? '💦' : s.variant === 'constipation' ? '🪨' : '💩';
-    const sColor = s.variant === 'diarrhea' ? '180,83,9' : s.variant === 'constipation' ? '41,37,36' : '120,53,15';
+    const hasDiarrhea = s.variant === 'diarrhea' || (s.fusion && s.fusion.includes('diarrhea'));
+    const hasConstipation = s.variant === 'constipation' || (s.fusion && s.fusion.includes('constipation'));
+    const sEmoji = hasDiarrhea ? '💦' : hasConstipation ? '🪨' : '💩';
+    const sColor = hasDiarrhea ? '180,83,9' : hasConstipation ? '41,37,36' : '120,53,15';
     ctx.font = `${Math.floor(TILE*1.05)}px serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(sEmoji, s.x, s.y);
