@@ -246,26 +246,53 @@ canvas.width  = W;
 canvas.height = H;
 
 // ═══════════════════════════════════════════════
-//  PATH  — portrait snake pattern (col, row)
+//  PATH DEFINITIONS (stage-aware)
 // ═══════════════════════════════════════════════
-const WP_GRID = [
+
+// Stage 1: snake / zigzag pattern
+const WP_GRID_S1 = [
   [0,1],[7,1],[7,4],[2,4],[2,7],[7,7],[7,10],[2,10],[2,13],[9,13]
 ];
 
-const pathSet = new Set();
-for (let i = 0; i < WP_GRID.length - 1; i++) {
-  const [c1,r1] = WP_GRID[i], [c2,r2] = WP_GRID[i+1];
-  if (r1 === r2)
-    for (let c = Math.min(c1,c2); c <= Math.max(c1,c2); c++) pathSet.add(`${c},${r1}`);
-  else
-    for (let r = Math.min(r1,r2); r <= Math.max(r1,r2); r++) pathSet.add(`${c1},${r}`);
+// Stage 2: inward spiral maze — enemies spiral clockwise to the center
+const WP_GRID_S2 = [
+  [0,0],[9,0],
+  [9,13],[0,13],[0,2],[8,2],
+  [8,11],[1,11],[1,4],[7,4],
+  [7,9],[2,9],[2,6],[6,6],
+  [6,7],[4,7]
+];
+
+function buildPathSet(wpGrid) {
+  const ps = new Set();
+  for (let i = 0; i < wpGrid.length - 1; i++) {
+    const [c1,r1] = wpGrid[i], [c2,r2] = wpGrid[i+1];
+    if (r1 === r2)
+      for (let c = Math.min(c1,c2); c <= Math.max(c1,c2); c++) ps.add(`${c},${r1}`);
+    else
+      for (let r = Math.min(r1,r2); r <= Math.max(r1,r2); r++) ps.add(`${c1},${r}`);
+  }
+  return ps;
 }
 
-const WAYPOINTS = [
-  { x: -TILE/2,  y: 1*TILE + TILE/2 },
-  ...WP_GRID.map(([c,r]) => ({ x: c*TILE+TILE/2, y: r*TILE+TILE/2 })),
+const pathSet_S1 = buildPathSet(WP_GRID_S1);
+const pathSet_S2 = buildPathSet(WP_GRID_S2);
+
+const WAYPOINTS_S1 = [
+  { x: -TILE/2, y: 1*TILE + TILE/2 },
+  ...WP_GRID_S1.map(([c,r]) => ({ x: c*TILE+TILE/2, y: r*TILE+TILE/2 })),
   { x: W+TILE/2, y: 13*TILE + TILE/2 }
 ];
+
+// Stage 2: entry from top-left, no off-screen exit — center tile IS the end
+const WAYPOINTS_S2 = [
+  { x: -TILE/2, y: 0*TILE + TILE/2 },
+  ...WP_GRID_S2.map(([c,r]) => ({ x: c*TILE+TILE/2, y: r*TILE+TILE/2 }))
+];
+
+function currentPathSet() { return stage >= 2 ? pathSet_S2 : pathSet_S1; }
+function currentWaypoints() { return stage >= 2 ? WAYPOINTS_S2 : WAYPOINTS_S1; }
+function currentWpGrid() { return stage >= 2 ? WP_GRID_S2 : WP_GRID_S1; }
 
 // ═══════════════════════════════════════════════
 //  TOWER DEFINITIONS  (ranges scaled to TILE)
@@ -435,7 +462,7 @@ function playSound(type) {
 // ═══════════════════════════════════════════════
 //  GAME STATE
 // ═══════════════════════════════════════════════
-let money=150, lives=20, wave=0;
+let money=150, lives=20, wave=0, stage=1;
 let state='idle';
 let bossWarnTimer=0;
 
@@ -463,17 +490,40 @@ function waveCfg(n) {
   const spd = n <= PIVOT
     ? 44 + n * 3
     : (44 + PIVOT * 3) + Math.floor((n - PIVOT) * 1.5);
+  hp = Math.floor(hp * (1 + (stage - 1) * 0.5));
   return { count:6+n*2, hp, speed:spd, reward:2+Math.floor(n*0.6) };
 }
 
 function isBossWave(n) { return n % 10 === 0; }
+function isFinalBoss(n) { return n === 30; }
+function bossMult(n) {
+  if (n === 30) return 1.05 * 0.95;
+  if (n === 10 || n === 20) return 1.05 * 1.2;
+  return 1.05;
+}
 
 function sendWave() {
+  if (state === 'victory') {
+    stage++;
+    wave = 0;
+    state = 'idle';
+    towers = []; enemies = []; projectiles = [];
+    particles = []; chainEffects = []; poopSplats = [];
+    selTId = null; clearInfo();
+    const bonus = 300;
+    money += bonus;
+    refreshUI();
+    document.getElementById('info-txt').textContent =
+      `🌟 Stage ${stage} — Spiral Maze! Enemies are 50% stronger. +$${bonus} bonus. Build towers on the maze walls!`;
+    hideAllUpgrades();
+    document.getElementById('sell-btn').style.display = 'none';
+    return;
+  }
   if (state!=='idle') return;
   wave++;
   if (isBossWave(wave)) {
     state = 'boss-warning';
-    bossWarnTimer = 3.0;
+    bossWarnTimer = isFinalBoss(wave) ? 4.0 : 3.0;
   } else {
     launchWave();
   }
@@ -484,7 +534,7 @@ function launchWave() {
   state = 'wave';
   if (isBossWave(wave)) {
     const prev = waveCfg(wave - 1);
-    const bossHp = Math.floor(prev.count * prev.hp * 1.05);
+    const bossHp = Math.floor(prev.count * prev.hp * bossMult(wave));
     const bossReward = Math.floor(prev.count * prev.reward * 2);
     spawnQueue = [{ hp:bossHp, speed:13.5, reward:bossReward, boss:true }];
   } else {
@@ -500,7 +550,7 @@ function spawnEnemy(cfg) {
     hp:cfg.hp, maxHp:cfg.hp,
     speed:cfg.speed, baseSpeed:cfg.speed, reward:cfg.reward,
     wpIdx:0,
-    x:WAYPOINTS[0].x, y:WAYPOINTS[0].y,
+    x:currentWaypoints()[0].x, y:currentWaypoints()[0].y,
     dots:[], slow:0, slowMult:VARIANTS.smelly.slowMult, vulnerable:0, vulnMult:VARIANTS.herpes.vulnMult,
     boss: cfg.boss || false
   });
@@ -523,7 +573,7 @@ function placeTower(col, row) {
   const def = DEFS[selType];
   if (money < def.cost) return;
   if (col<0||col>=COLS||row<0||row>=ROWS) return;
-  if (pathSet.has(`${col},${row}`)) return;
+  if (currentPathSet().has(`${col},${row}`)) return;
   if (towers.some(t=>t.col===col&&t.row===row)) return;
   money -= def.cost;
   towers.push({
@@ -841,7 +891,7 @@ const ALL_UP_IDS = ['up-btn','up-smelly','up-bloody','up-lightning','up-longkick
 function refreshUI() {
   document.getElementById('s-money').textContent = money;
   document.getElementById('s-lives').textContent = lives;
-  document.getElementById('s-wave').textContent  = wave;
+  document.getElementById('s-wave').textContent  = stage > 1 ? `S${stage}·${wave}` : wave;
 
   const wb   = document.getElementById('wave-btn');
   const info = document.getElementById('wave-info-detail');
@@ -851,19 +901,30 @@ function refreshUI() {
     wb.textContent = '⏳ In progress…'; wb.disabled = true;
     info.innerHTML = '';
   } else if (state==='boss-warning') {
-    wb.textContent = '⚠️ Boss incoming!'; wb.disabled = true;
-    info.innerHTML = `<span class="wi-boss">💀 Boss wave — prepare!</span>`;
+    if (isFinalBoss(wave)) {
+      wb.textContent = '☠️ FINAL BOSS!'; wb.disabled = true;
+      info.innerHTML = `<span class="wi-boss">☠️ FINAL BOSS — Defeat it or it's all over!</span>`;
+    } else {
+      wb.textContent = '⚠️ Boss incoming!'; wb.disabled = true;
+      info.innerHTML = `<span class="wi-boss">💀 Boss wave — prepare!</span>`;
+    }
   } else if (state==='gameover') {
     wb.textContent = 'Game Over'; wb.disabled = true;
     info.innerHTML = '';
+  } else if (state==='victory') {
+    wb.textContent = `🌟 Stage ${stage + 1}`; wb.disabled = false;
+    info.innerHTML = `<span style="color:#fbbf24;font-weight:bold">🏆 STAGE CLEAR! Press to continue</span>`;
   } else {
     const isBoss = isBossWave(next);
-    wb.textContent = isBoss ? `💀 Wave ${next}` : `▶ Wave ${next}`;
+    const isFinal = isFinalBoss(next);
+    const wLabel = stage > 1 ? `S${stage} Wave ${next}` : `Wave ${next}`;
+    wb.textContent = isFinal ? `☠️ FINAL BOSS` : isBoss ? `💀 ${wLabel}` : `▶ ${wLabel}`;
     wb.disabled = false;
     if (isBoss) {
       const prev = waveCfg(next - 1);
-      const bossHp = Math.floor(prev.count * prev.hp * 1.5);
-      info.innerHTML = `<span class="wi-boss">💀 BOSS — ${bossHp.toLocaleString()} HP</span>`;
+      const bossHp = Math.floor(prev.count * prev.hp * bossMult(next));
+      const tag = isFinal ? '☠️ FINAL BOSS' : '💀 BOSS';
+      info.innerHTML = `<span class="wi-boss">${tag} — ${bossHp.toLocaleString()} HP</span>`;
     } else {
       const cfg = waveCfg(next);
       info.innerHTML = `👾 ×${cfg.count} &nbsp;❤️ ${cfg.hp.toLocaleString()} &nbsp;💨 ${cfg.speed}`;
@@ -1229,10 +1290,15 @@ function update(dt) {
     if (e.slow>0) e.slow -= dt*1000;
     const spd = e.slow>0 ? e.baseSpeed*e.slowMult : e.baseSpeed;
 
-    const wp = WAYPOINTS[e.wpIdx+1];
+    const wp = currentWaypoints()[e.wpIdx+1];
     if (!wp) {
-      e.alive=false; lives--;
-      if (lives<=0){lives=0;state='gameover';}
+      e.alive = false;
+      if (e.boss && isFinalBoss(wave)) {
+        lives = 0; state = 'gameover';
+      } else {
+        lives--;
+        if (lives<=0){lives=0;state='gameover';}
+      }
       refreshUI(); continue;
     }
     const dx=wp.x-e.x, dy=wp.y-e.y, dist=Math.hypot(dx,dy);
@@ -1377,13 +1443,23 @@ function update(dt) {
 
   // Wave complete
   if (spawnQueue.length===0 && enemies.length===0 && state==='wave') {
-    state='idle';
-    const bonus = 25+wave*5;
-    money += bonus; refreshUI();
-    document.getElementById('info-txt').textContent =
-      `✅ Wave ${wave} cleared! +$${bonus} bonus. Build more, then send the next wave.`;
-    hideAllUpgrades();
-    document.getElementById('sell-btn').style.display='none';
+    if (isFinalBoss(wave)) {
+      state = 'victory';
+      money += 500;
+      refreshUI();
+      document.getElementById('info-txt').textContent =
+        `🏆 FINAL BOSS DEFEATED! +$500 bonus. Press the button to enter Stage ${stage + 1}!`;
+      hideAllUpgrades();
+      document.getElementById('sell-btn').style.display='none';
+    } else {
+      state='idle';
+      const bonus = 25+wave*5;
+      money += bonus; refreshUI();
+      document.getElementById('info-txt').textContent =
+        `✅ Wave ${wave} cleared! +$${bonus} bonus. Build more, then send the next wave.`;
+      hideAllUpgrades();
+      document.getElementById('sell-btn').style.display='none';
+    }
   }
 }
 
@@ -1400,7 +1476,7 @@ function draw() {
   for (let r=0;r<=ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*TILE);ctx.lineTo(W,r*TILE);ctx.stroke();}
 
   // Path
-  for (const key of pathSet) {
+  for (const key of currentPathSet()) {
     const [c,r] = key.split(',').map(Number);
     ctx.fillStyle='#c2a46a';
     ctx.fillRect(c*TILE+1,r*TILE+1,TILE-2,TILE-2);
@@ -1414,20 +1490,30 @@ function draw() {
   ctx.font=`${Math.floor(TILE*0.3)}px serif`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillStyle='#8a6a30';
-  for (let i=0;i<WP_GRID.length-1;i++) {
-    const [c1,r1]=WP_GRID[i],[c2,r2]=WP_GRID[i+1];
+  const wpg = currentWpGrid();
+  for (let i=0;i<wpg.length-1;i++) {
+    const [c1,r1]=wpg[i],[c2,r2]=wpg[i+1];
     const mc=(c1+c2)/2, mr=(r1+r2)/2;
     ctx.fillText(c2>c1?'→':c2<c1?'←':r2>r1?'↓':'↑', mc*TILE+TILE/2, mr*TILE+TILE/2);
   }
 
-  // START / END
+  // START / END labels
   ctx.fillStyle='#fff'; ctx.font=`bold ${Math.floor(TILE*0.24)}px Segoe UI`;
-  ctx.textAlign='left';  ctx.fillText('▶START', 2, 1*TILE+TILE*0.35);
-  ctx.textAlign='right'; ctx.fillText('END✕',  W-2, 13*TILE+TILE*0.65);
+  if (stage >= 2) {
+    ctx.textAlign='left'; ctx.fillText('▶START', 2, 0*TILE+TILE*0.35);
+    // center end marker
+    ctx.font=`${Math.floor(TILE*0.55)}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🎯', 4*TILE+TILE/2, 7*TILE+TILE/2);
+    ctx.textBaseline='alphabetic';
+  } else {
+    ctx.textAlign='left';  ctx.fillText('▶START', 2, 1*TILE+TILE*0.35);
+    ctx.textAlign='right'; ctx.fillText('END✕',  W-2, 13*TILE+TILE*0.65);
+  }
 
   // Placement hover (touchmove preview)
   if (selType && touchCol>=0 && touchRow>=0) {
-    const can = !pathSet.has(`${touchCol},${touchRow}`) &&
+    const can = !currentPathSet().has(`${touchCol},${touchRow}`) &&
                 !towers.some(t=>t.col===touchCol&&t.row===touchRow) &&
                 touchCol<COLS && touchRow<ROWS;
     ctx.fillStyle = can ? 'rgba(255,255,255,0.25)' : 'rgba(255,60,60,0.3)';
@@ -1641,33 +1727,73 @@ function draw() {
 
   // Boss warning overlay
   if (state==='boss-warning') {
-    const frac = bossWarnTimer / 3.0;
+    const isFinal = isFinalBoss(wave);
     const pulse = 0.55 + 0.2 * Math.sin(Date.now() / 180);
-    ctx.fillStyle = `rgba(80,0,0,${0.55 * pulse})`; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = isFinal ? `rgba(60,0,60,${0.65 * pulse})` : `rgba(80,0,0,${0.55 * pulse})`;
+    ctx.fillRect(0,0,W,H);
     ctx.save();
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.font=`bold ${Math.floor(TILE*0.85)}px Segoe UI`;
-    ctx.fillStyle=`rgba(255,60,60,${pulse})`;
-    ctx.fillText('💀 BOSS WAVE', W/2, H/2 - TILE*0.9);
-    ctx.font=`bold ${Math.floor(TILE*0.42)}px Segoe UI`;
-    ctx.fillStyle='#fbbf24';
-    ctx.fillText(`Wave ${wave} — Prepare yourself!`, W/2, H/2);
+    if (isFinal) {
+      ctx.font=`bold ${Math.floor(TILE*0.8)}px Segoe UI`;
+      ctx.fillStyle=`rgba(255,80,255,${pulse})`;
+      ctx.fillText('☠️ FINAL BOSS ☠️', W/2, H/2 - TILE*1.1);
+      ctx.font=`bold ${Math.floor(TILE*0.42)}px Segoe UI`;
+      ctx.fillStyle='#ff6b35';
+      ctx.fillText('Wave 30 — Last Stand!', W/2, H/2 - TILE*0.1);
+      ctx.font=`${Math.floor(TILE*0.34)}px Segoe UI`;
+      ctx.fillStyle='#fbbf24';
+      ctx.fillText('Defeat it or the game ends!', W/2, H/2 + TILE*0.7);
+    } else {
+      ctx.font=`bold ${Math.floor(TILE*0.85)}px Segoe UI`;
+      ctx.fillStyle=`rgba(255,60,60,${pulse})`;
+      ctx.fillText('💀 BOSS WAVE', W/2, H/2 - TILE*0.9);
+      ctx.font=`bold ${Math.floor(TILE*0.42)}px Segoe UI`;
+      ctx.fillStyle='#fbbf24';
+      ctx.fillText(`Wave ${wave} — Prepare yourself!`, W/2, H/2);
+    }
     ctx.font=`${Math.floor(TILE*0.35)}px Segoe UI`;
     ctx.fillStyle='#ddd';
-    ctx.fillText(`Starting in ${Math.ceil(bossWarnTimer)}…`, W/2, H/2 + TILE*0.85);
+    ctx.fillText(`Starting in ${Math.ceil(bossWarnTimer)}…`, W/2, H/2 + TILE*(isFinal ? 1.45 : 0.85));
     ctx.restore();
   }
 
   // Overlays
-  if (state==='idle' && wave===0) {
+  if (state==='idle' && wave===0 && stage===1) {
     ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,W,H);
+    ctx.save();
+    ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillStyle='#fff';
     ctx.font=`bold ${Math.floor(TILE*0.65)}px Segoe UI`;
+    ctx.fillText('Tower Defense', W/2, H/2-TILE*1.6);
+    ctx.font=`bold ${Math.floor(TILE*0.42)}px Segoe UI`;
+    ctx.fillStyle='#fbbf24';
+    ctx.fillText('⚔ Stage 1 — 30 Waves ⚔', W/2, H/2-TILE*0.85);
+    ctx.font=`${Math.floor(TILE*0.32)}px Segoe UI`; ctx.fillStyle='#aaa';
+    ctx.fillText('Snake path • Survive all 30 waves', W/2, H/2-TILE*0.1);
+    ctx.fillText('Beat wave 30 Boss to unlock Stage 2!', W/2, H/2+TILE*0.55);
+    ctx.font=`${Math.floor(TILE*0.35)}px Segoe UI`; ctx.fillStyle='#ddd';
+    ctx.fillText('Tap a tile to build — then ▶ Wave 1', W/2, H/2+TILE*1.35);
+    ctx.restore();
+  }
+
+  if (state==='victory') {
+    const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 300);
+    ctx.fillStyle=`rgba(0,20,0,${0.72 * pulse})`; ctx.fillRect(0,0,W,H);
+    ctx.save();
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('Tower Defense', W/2, H/2-TILE*1.2);
-    ctx.font=`${Math.floor(TILE*0.37)}px Segoe UI`; ctx.fillStyle='#ddd';
-    ctx.fillText('Tap a tower below, place on green tiles', W/2, H/2);
-    ctx.fillText('then tap ▶ Wave 1 to start!', W/2, H/2+TILE*0.7);
+    ctx.font=`bold ${Math.floor(TILE*0.9)}px Segoe UI`;
+    ctx.fillStyle=`rgba(255,215,0,${pulse})`;
+    ctx.fillText('🏆 CONGRATULATIONS! 🏆', W/2, H/2 - TILE*1.3);
+    ctx.font=`bold ${Math.floor(TILE*0.5)}px Segoe UI`;
+    ctx.fillStyle='#22c55e';
+    ctx.fillText('Final Boss Defeated!', W/2, H/2 - TILE*0.35);
+    ctx.font=`${Math.floor(TILE*0.38)}px Segoe UI`;
+    ctx.fillStyle='#fbbf24';
+    ctx.fillText(`Stage ${stage} Complete!`, W/2, H/2 + TILE*0.45);
+    ctx.font=`${Math.floor(TILE*0.33)}px Segoe UI`;
+    ctx.fillStyle='#93c5fd';
+    ctx.fillText(`Press "Stage ${stage+1}" button to continue`, W/2, H/2 + TILE*1.2);
+    ctx.restore();
   }
 
   if (state==='gameover') {
@@ -1714,7 +1840,7 @@ function handleTap(col, row) {
       selTId  = existing.id;
       showTowerInfo(existing);
     }
-  } else if (!pathSet.has(`${col},${row}`) && col>=0 && col<COLS && row>=0 && row<ROWS) {
+  } else if (!currentPathSet().has(`${col},${row}`) && col>=0 && col<COLS && row>=0 && row<ROWS) {
     if (buildPopupCol === col && buildPopupRow === row) {
       // Same empty tile tapped again — close build popup
       hideBuildPopup();
