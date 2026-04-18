@@ -379,8 +379,8 @@ const VARIANTS = {
     icon:'🪨', projIcon:'💩',
     fireRateMult:1.0,
     splatDuration:6.0,
-    dotDmgMult:1.8,
-    desc:'Splat lasts 6s • 1.8× poison damage'
+    dotDmgMult:4.0,
+    desc:'Splat lasts 6s • 4× poison damage'
   }
 };
 
@@ -494,6 +494,7 @@ function waveCfg(n) {
     ? 44 + n * 3
     : (44 + PIVOT * 3) + Math.floor((n - PIVOT) * 1.5);
   hp = Math.floor(hp * (1 + (stage - 1) * 0.5));
+  if (n > 20) hp = Math.floor(hp * 1.2);
   return { count:6+n*2, hp, speed:spd, reward:2+Math.floor(n*0.6) };
 }
 
@@ -820,9 +821,11 @@ function fusedNameLv5(variants, baseType) {
   return `Transcendent ${variants.map(strip).join(' ')} ${tName}`;
 }
 
-function applyVariantEffect(e, vKey, p, boosted, isLv5 = false) {
+// isFused=true when the tower has 2+ variants merged — each ability is half strength
+function applyVariantEffect(e, vKey, p, boosted, isLv5 = false, isFused = false) {
   if (vKey === 'longkick') {
-    const killChance = isLv5 ? (boosted ? 0.12 : 0.10) : (boosted ? 0.05 : 0);
+    let killChance = isLv5 ? 0.07 : (boosted ? 0.05 : 0);
+    if (isFused) killChance *= 0.5;
     if (killChance > 0 && !e.boss && Math.random() < killChance) {
       e.hp = 0;
       addParticle(e.x, e.y-22, '💀 INSTANT!', '#38bdf8');
@@ -831,19 +834,24 @@ function applyVariantEffect(e, vKey, p, boosted, isLv5 = false) {
   }
   const v = VARIANTS[vKey];
   if (!v || !v.effect) return;
-  const chance = isLv5
-    ? Math.min(0.70, v.chance * (boosted ? 3.5 : 3.0))
+  let chance = isLv5
+    ? Math.min(0.50, v.chance * 2.5)
     : boosted ? Math.min(0.55, v.chance * 2) : v.chance;
+  if (isFused) chance *= 0.5;
   if (Math.random() >= chance) return;
-  const T = isLv5 ? (boosted ? 3.5 : 3.0) : (boosted ? 2.0 : 1.0);
+  // T controls duration/radius; for fused towers halve the bonus portion (T-1)
+  let T = isLv5 ? 2.5 : (boosted ? 2.0 : 1.0);
+  if (isFused) T = 1 + (T - 1) * 0.5;
   if (v.effect === 'slow') {
-    const dur = v.slowDuration * T;
-    const mag = isLv5 ? v.slowMult * (boosted ? 0.15 : 0.25) : boosted ? v.slowMult * 0.5 : v.slowMult;
+    let dur = v.slowDuration * T;
+    let mag = isLv5 ? v.slowMult * 0.4 : boosted ? v.slowMult * 0.5 : v.slowMult;
+    if (isFused) mag = 1 - (1 - mag) * 0.5;
+    if (e.boss) { dur *= 0.5; mag = 1 - (1 - mag) * 0.5; }
     e.slow = dur;
     e.slowMult = mag;
     addParticle(e.x, e.y-22, isLv5 ? '❄❄❄ BLIZZARD!' : boosted ? '❄❄ FROZEN!' : '❄ SLOW!', '#67e8f9');
   } else if (v.effect === 'splash') {
-    const ratio  = Math.min(isLv5 ? 2.0 : 1.0, v.splashRatio * T);
+    const ratio  = Math.min(isLv5 ? 1.5 : 1.0, v.splashRatio * T);
     const radius = v.splashRadius * T;
     const sd = Math.floor(p.damage * ratio);
     for (const ne of enemies) {
@@ -854,7 +862,8 @@ function applyVariantEffect(e, vKey, p, boosted, isLv5 = false) {
     }
     addParticle(e.x, e.y-22, isLv5 ? '💥💥💥 NOVA SPLASH!' : boosted ? '💥💥 MEGA SPLASH!' : '💥 SPLASH!', '#f87171');
   } else if (v.effect === 'chain') {
-    const chainCount = isLv5 ? v.chainCount * 5 : boosted ? v.chainCount * 3 : v.chainCount;
+    let chainCount = isLv5 ? v.chainCount * 4 : boosted ? v.chainCount * 3 : v.chainCount;
+    if (isFused) chainCount = Math.max(1, Math.ceil(chainCount * 0.5));
     let from = e, cdmg = p.damage;
     const done = new Set([e.id]);
     for (let i = 0; i < chainCount; i++) {
@@ -874,20 +883,28 @@ function applyVariantEffect(e, vKey, p, boosted, isLv5 = false) {
     }
     addParticle(e.x, e.y-22, isLv5 ? '⚡⚡⚡ STORM!' : '⚡ CHAIN!', '#fbbf24');
   } else if (v.effect === 'aoe_slow') {
-    const dur    = v.slowDuration * T;
+    let dur    = v.slowDuration * T;
     const radius = v.slowRadius * T;
-    const mag    = isLv5 ? v.slowMult * (boosted ? 0.15 : 0.25) : boosted ? v.slowMult * 0.5 : v.slowMult;
-    e.slow = dur; e.slowMult = mag;
+    let mag = isLv5 ? v.slowMult * 0.4 : boosted ? v.slowMult * 0.5 : v.slowMult;
+    if (isFused) mag = 1 - (1 - mag) * 0.5;
+    const applySlowTo = (en) => {
+      let d = dur, m = mag;
+      if (en.boss) { d *= 0.5; m = 1 - (1 - m) * 0.5; }
+      en.slow = d; en.slowMult = m;
+    };
+    applySlowTo(e);
     for (const ne of enemies) {
       if (ne.id!==e.id && ne.alive && Math.hypot(ne.x-e.x,ne.y-e.y)<=radius) {
-        ne.slow = dur; ne.slowMult = mag;
+        applySlowTo(ne);
       }
     }
     addParticle(e.x, e.y-22, isLv5 ? '🟡🟡🟡 MIASMA!' : boosted ? '🟡🟡 TOXIC PHLEGM!' : '🟡 PHLEGM!', '#eab308');
   } else if (v.effect === 'vulnerable') {
     const pLevel = p.level || 2;
-    const dur = Math.floor(v.vulnDuration * Math.pow(1.5, Math.max(0, pLevel - 2)));
-    const mult = isLv5 ? v.vulnMult * (boosted ? 3.5 : 3) : boosted ? v.vulnMult * 2 : v.vulnMult;
+    const baseDur = Math.floor(v.vulnDuration * Math.pow(1.5, Math.max(0, pLevel - 2)));
+    const dur = isFused ? Math.floor(baseDur * 0.5) : baseDur;
+    let mult = isLv5 ? v.vulnMult * 2.5 : boosted ? v.vulnMult * 2 : v.vulnMult;
+    if (isFused) mult = 1 + (mult - 1) * 0.5;  // halve the damage bonus
     e.vulnerable = dur;
     e.vulnMult   = mult;
     addParticle(e.x, e.y-22, isLv5 ? '🦠🦠🦠 PLAGUE!' : boosted ? '🦠🦠 EPIDEMIC!' : '🦠 INFECTED!', '#a855f7');
@@ -1065,34 +1082,34 @@ function getSkillDesc(vKey, boosted, isLv5 = false, level = 2) {
   const v = VARIANTS[vKey];
   const pct = n => Math.round(n * 100);
   const ch = isLv5
-    ? Math.min(70, pct(v.chance) * (boosted ? 3.5 : 3))
+    ? Math.min(50, pct(v.chance) * 2.5)
     : boosted ? Math.min(55, pct(v.chance) * 2) : pct(v.chance);
   if (vKey==='smelly')       return isLv5
-    ? (boosted ? `❄❄❄ Slow ${ch}% · 3.5s · 4× intense` : `❄❄❄ Slow ${ch}% · 3s · 3× intense`)
+    ? `❄❄❄ Slow ${ch}% · 2.5s · 3× intense`
     : boosted ? `❄❄ Slow ${ch}% · 2s · 2× intensity` : `❄ Slow ${ch}% · 1s`;
   if (vKey==='bloody')       return isLv5
-    ? (boosted ? `💥💥💥 Splash ${ch}% · 3.5× area · 3.5× dmg` : `💥💥💥 Splash ${ch}% · 3× area · 3× dmg`)
+    ? `💥💥💥 Splash ${ch}% · 2.5× area · 1.5× dmg`
     : boosted ? `💥 Splash ${ch}% · 2× area · 2× dmg` : `💥 Splash ${ch}%`;
   if (vKey==='lightning')    return isLv5
-    ? `⚡⚡⚡ Chain ${ch}% → 10 enemies`
+    ? `⚡⚡⚡ Chain ${ch}% → 8 enemies`
     : `⚡ Chain ${ch}% → ${boosted?6:2} enemies`;
   if (vKey==='longkick')     return isLv5
-    ? (boosted ? `🦵💀 Farthest · 12% instant kill` : `🦵💀 Farthest · 10% instant kill`)
+    ? `🦵💀 Farthest · 7% instant kill`
     : boosted ? `🦵 Farthest · extra range · 5% instant kill` : `🦵 Farthest target`;
   if (vKey==='phlegm')       return isLv5
-    ? (boosted ? `🟡🟡🟡 AoE Slow ${ch}% · 8.75s · 3.5× area` : `🟡🟡🟡 AoE Slow ${ch}% · 7.5s · 3× area`)
+    ? `🟡🟡🟡 AoE Slow ${ch}% · 6.25s · 2.5× area`
     : boosted ? `🟡🟡 AoE Slow ${ch}% · 5s · 2× area · 2× intensity` : `🟡 AoE Slow ${ch}% · 2.5s`;
   if (vKey==='herpes') {
     const dur = +(v.vulnDuration * Math.pow(1.5, Math.max(0, level - 2)) / 1000).toFixed(1);
-    const mult = isLv5 ? (boosted ? Math.round(v.vulnMult*3.5) : v.vulnMult*3) : boosted ? v.vulnMult*2 : v.vulnMult;
+    const mult = isLv5 ? v.vulnMult * 2.5 : boosted ? v.vulnMult*2 : v.vulnMult;
     return `🦠${isLv5?'🦠🦠':boosted?'🦠':''} Vuln ${ch}% · ${mult}× dmg · ${dur}s`;
   }
   if (vKey==='diarrhea')     return isLv5
-    ? (boosted ? `💦💦💦 3× fire rate · 3× DoT` : `💦💦💦 2.5× fire rate · 2× DoT`)
+    ? `💦💦💦 2× fire rate · 2× DoT`
     : boosted ? `💦💦 2× fire rate · 2× DoT` : `💦 Fast fire · 3s splat`;
   if (vKey==='constipation') return isLv5
-    ? (boosted ? `🪨🪨🪨 8s splat · 3× DoT · 3× area` : `🪨🪨🪨 7s splat · 2.5× DoT · 2.5× area`)
-    : boosted ? `🪨🪨 6s splat · 2× DoT · 2× area` : `🪨 6s splat · 1.8× DoT`;
+    ? `🪨🪨🪨 7.5s splat · 5× DoT · 2.5× area`
+    : boosted ? `🪨🪨 6s splat · 5× DoT · 2× area` : `🪨 6s splat · 4× DoT`;
   return v.desc || '';
 }
 
@@ -1123,49 +1140,50 @@ function getVariantDetail(vk, isLv5, boosted, level) {
   const v = VARIANTS[vk];
   if (!v) return '';
   const ch = isLv5
-    ? Math.min(70, Math.round(v.chance * (boosted ? 3.5 : 3) * 100))
+    ? Math.min(50, Math.round(v.chance * 2.5 * 100))
     : boosted ? Math.min(55, Math.round(v.chance * 2 * 100)) : Math.round(v.chance * 100);
   const it = s => `<i style="color:#9ca3af">${s}</i>`;
   switch (vk) {
     case 'smelly': {
-      const dur = isLv5 ? (boosted ? 3.5 : 3.0) : (boosted ? 2.0 : 1.0);
-      const slowPct = isLv5 ? (boosted ? 85 : 75) : (boosted ? 83 : 65);
+      const dur = isLv5 ? 2.5 : (boosted ? 2.0 : 1.0);
+      const slowPct = isLv5 ? 86 : (boosted ? 83 : 65);
       return `Each attack has <b>${ch}%</b> chance to <b>Slow</b> the target by ${slowPct}% for ${dur}s.<br>${it('Slow: reduces enemy movement speed.')}`;
     }
     case 'bloody': {
-      const ratio = Math.round(Math.min(isLv5 ? 2.0 : 1.0, v.splashRatio * (isLv5 ? (boosted?3.5:3) : boosted?2:1)) * 100);
-      const radius = ((v.splashRadius * (isLv5 ? (boosted?3.5:3) : boosted?2:1)) / TILE).toFixed(1);
+      const T = isLv5 ? 2.5 : (boosted ? 2 : 1);
+      const ratio = Math.round(Math.min(isLv5 ? 1.5 : 1.0, v.splashRatio * T) * 100);
+      const radius = ((v.splashRadius * T) / TILE).toFixed(1);
       return `Each attack has <b>${ch}%</b> chance to <b>Splash</b> ${ratio}% of attack damage to enemies within ${radius} tiles.<br>${it('Splash: area burst hits all nearby enemies.')}`;
     }
     case 'lightning': {
-      const jumps = isLv5 ? 10 : (boosted ? v.chainCount * 3 : v.chainCount);
+      const jumps = isLv5 ? v.chainCount * 4 : (boosted ? v.chainCount * 3 : v.chainCount);
       return `Each attack has <b>${ch}%</b> chance to chain lightning to <b>${jumps}</b> additional enemies. Each jump deals ${Math.round(v.chainDmgRatio*100)}% of the previous hit's damage.<br>${it('Chain: lightning jumps between enemies.')}`;
     }
     case 'longkick': {
-      const killPct = isLv5 ? (boosted ? 12 : 10) : (boosted ? 5 : 0);
+      const killPct = isLv5 ? 7 : (boosted ? 5 : 0);
       const killLine = killPct > 0 ? `<br><b>${killPct}%</b> chance to <b>Instantly Kill</b> non-boss enemies.` : '';
       return `Always targets the <b>farthest enemy</b> in range (range ×1.9).${killLine}<br>${it('Instant Kill: eliminates regardless of remaining HP.')}`;
     }
     case 'phlegm': {
-      const dur = (v.slowDuration * (isLv5 ? (boosted?3.5:3) : boosted?2:1) / 1000).toFixed(1);
-      const radius = ((v.slowRadius * (isLv5 ? (boosted?3.5:3) : boosted?2:1)) / TILE).toFixed(1);
-      const slowPct = isLv5 ? (boosted ? 85 : 75) : (boosted ? 83 : 65);
+      const T = isLv5 ? 2.5 : (boosted ? 2 : 1);
+      const dur = (v.slowDuration * T / 1000).toFixed(1);
+      const radius = ((v.slowRadius * T) / TILE).toFixed(1);
+      const slowPct = isLv5 ? 86 : (boosted ? 83 : 65);
       return `Each attack has <b>${ch}%</b> chance to slow <b>ALL enemies</b> within ${radius} tiles by ${slowPct}% for ${dur}s.<br>${it('AoE Slow: slows all nearby enemies simultaneously.')}`;
     }
     case 'herpes': {
       const dur = +(v.vulnDuration * Math.pow(1.5, Math.max(0, level - 2)) / 1000).toFixed(1);
-      const mult = isLv5 ? (boosted ? Math.round(v.vulnMult*3.5) : v.vulnMult*3) : (boosted ? v.vulnMult*2 : v.vulnMult);
+      const mult = isLv5 ? v.vulnMult * 2.5 : (boosted ? v.vulnMult*2 : v.vulnMult);
       return `Each attack has <b>${ch}%</b> chance to make the enemy <b>Vulnerable</b> for ${dur}s. Vulnerable enemy takes <b>${mult}× damage</b> from ALL sources.<br>${it('Vulnerability: amplifies all damage received — synergizes with other towers!')}`;
     }
     case 'diarrhea': {
-      const fireRate = isLv5 ? (boosted ? '3×' : '2.5×') : '2.4×';
-      const dotM = isLv5 ? (boosted ? '3×' : '2×') : (boosted ? '2×' : '1×');
-      return `Fires <b>${fireRate} faster</b> than base poop tower. Leaves a brown puddle dealing DoT. DoT multiplier: <b>${dotM}</b>.<br>${it('Fast fire: far more frequent attacks than normal poop.')}`;
+      const dotM = isLv5 ? '2×' : (boosted ? '2×' : '1×');
+      return `Fires <b>2.4× faster</b> than base poop tower. Leaves a brown puddle dealing DoT. DoT multiplier: <b>${dotM}</b>.<br>${it('Fast fire: far more frequent attacks than normal poop.')}`;
     }
     case 'constipation': {
-      const splatDur = isLv5 ? (boosted ? 8 : 7) : 6;
-      const dotM = isLv5 ? (boosted ? '3×' : '2.5×') : (boosted ? '2×' : '1.8×');
-      const radM = isLv5 ? (boosted ? '3×' : '2.5×') : (boosted ? '2×' : '1×');
+      const splatDur = isLv5 ? 7.5 : 6;
+      const dotM = isLv5 ? '5×' : (boosted ? '5×' : '4×');
+      const radM = isLv5 ? '2.5×' : (boosted ? '2×' : '1×');
       return `Leaves a <b>${splatDur}s splat</b> dealing <b>${dotM}</b> DoT. Splat radius: <b>${radM}</b> base.<br>${it('Splat: lingering zone that damages all enemies passing through.')}`;
     }
     default:
@@ -1431,12 +1449,13 @@ function update(dt) {
       const BASE_RADIUS = TILE * 0.88;
       let projIcon, splatDur, splatDotDmg, splatRadius = BASE_RADIUS;
       if (t.fusion) {
-        const [f1, f2] = t.fusion;
-        const fv1 = VARIANTS[f1], fv2 = VARIANTS[f2];
-        projIcon    = fv1.projIcon ?? '💩';
-        splatDur    = Math.max(fv1.splatDuration||3, fv2.splatDuration||3);
-        const dMult = Math.max(fv1.dotDmgMult||1, fv2.dotDmgMult||1);
-        splatDotDmg = Math.floor(t.damage * dMult);
+        const fvs = t.fusion.map(vk => VARIANTS[vk]).filter(Boolean);
+        projIcon    = fvs[0]?.projIcon ?? '💩';
+        splatDur    = fvs.reduce((m, fv) => Math.max(m, fv.splatDuration||3), 3);
+        const dMult = fvs.reduce((m, fv) => Math.max(m, fv.dotDmgMult||1), 1);
+        splatDotDmg = fvs.length > 1
+          ? Math.floor(t.damage * (1 + (dMult - 1) * 0.5))
+          : Math.floor(t.damage * dMult);
       } else {
         const pv = t.variant ? VARIANTS[t.variant] : null;
         projIcon    = pv?.projIcon  ?? '💩';
@@ -1525,9 +1544,9 @@ function update(dt) {
         }
         // Variant / fusion effects
         if (p.fusion) {
-          for (const vKey of p.fusion) applyVariantEffect(e, vKey, p, p.boosted || false, (p.level||2) >= 5);
+          for (const vKey of p.fusion) applyVariantEffect(e, vKey, p, p.boosted || false, (p.level||2) >= 5, p.fusion.length > 1);
         } else if (p.variant) {
-          applyVariantEffect(e, p.variant, p, p.boosted || false, (p.level||2) >= 5);
+          applyVariantEffect(e, p.variant, p, p.boosted || false, (p.level||2) >= 5, false);
         }
         if (p.special) addParticle(e.x, e.y-22, '🦵 LONG KICK!', '#38bdf8');
       }
