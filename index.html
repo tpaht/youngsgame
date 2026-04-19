@@ -502,7 +502,7 @@ function isBossWave(n) { return n % 10 === 0; }
 function isFinalBoss(n) { return n === 30; }
 function bossMult(n) {
   if (n === 30) return 1.05 * 0.95;
-  if (n === 20) return 1.05 * 1.5;
+  if (n === 20) return 1.05 * 1.5 * 1.2;
   if (n === 10) return 1.05 * 1.2;
   return 1.05;
 }
@@ -544,7 +544,11 @@ function launchWave() {
     spawnQueue = [{ hp:bossHp, speed:13.5, reward:bossReward, boss:true }];
   } else {
     const cfg = waveCfg(wave);
-    const hp = wave <= 19 ? Math.floor(cfg.hp * 1.5) : cfg.hp;
+    let hp = cfg.hp;
+    if (wave <= 9) hp = Math.floor(hp * 2.25);
+    else if (wave <= 13) hp = Math.floor(hp * 1.5);
+    else if (wave <= 16) hp = Math.floor(hp * 2.25);
+    else hp = Math.floor(hp * 2.0);
     spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg, hp}));
   }
   spawnTimer = 0;
@@ -956,7 +960,7 @@ function refreshUI() {
       info.innerHTML = `<span class="wi-boss">${tag} — ${bossHp.toLocaleString()} HP</span>`;
     } else {
       const cfg = waveCfg(next);
-      const displayHp = next <= 19 ? Math.floor(cfg.hp * 1.5) : cfg.hp;
+      const displayHp = next <= 9 ? Math.floor(cfg.hp * 2.25) : next <= 13 ? Math.floor(cfg.hp * 1.5) : next <= 16 ? Math.floor(cfg.hp * 2.25) : Math.floor(cfg.hp * 2.0);
       info.innerHTML = `👾 ×${cfg.count} &nbsp;❤️ ${displayHp.toLocaleString()} &nbsp;💨 ${cfg.speed}`;
     }
   }
