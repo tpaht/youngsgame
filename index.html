@@ -544,7 +544,8 @@ function launchWave() {
     spawnQueue = [{ hp:bossHp, speed:13.5, reward:bossReward, boss:true }];
   } else {
     const cfg = waveCfg(wave);
-    spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg}));
+    const hp = wave <= 19 ? Math.floor(cfg.hp * 1.5) : cfg.hp;
+    spawnQueue = Array.from({length:cfg.count}, ()=>({...cfg, hp}));
   }
   spawnTimer = 0;
 }
@@ -955,7 +956,8 @@ function refreshUI() {
       info.innerHTML = `<span class="wi-boss">${tag} — ${bossHp.toLocaleString()} HP</span>`;
     } else {
       const cfg = waveCfg(next);
-      info.innerHTML = `👾 ×${cfg.count} &nbsp;❤️ ${cfg.hp.toLocaleString()} &nbsp;💨 ${cfg.speed}`;
+      const displayHp = next <= 19 ? Math.floor(cfg.hp * 1.5) : cfg.hp;
+      info.innerHTML = `👾 ×${cfg.count} &nbsp;❤️ ${displayHp.toLocaleString()} &nbsp;💨 ${cfg.speed}`;
     }
   }
 }
@@ -1410,7 +1412,7 @@ function update(dt) {
       if (e.boss && isFinalBoss(wave)) {
         lives = 0; state = 'gameover';
       } else {
-        lives--;
+        lives -= e.boss ? 5 : 1;
         if (lives<=0){lives=0;state='gameover';}
       }
       refreshUI(); continue;
